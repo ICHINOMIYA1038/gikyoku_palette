@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 type CreateNotificationParams = {
@@ -13,7 +13,7 @@ type CreateNotificationParams = {
 };
 
 export async function createNotification(params: CreateNotificationParams) {
-  await prisma.notification.create({
+  await prisma.paletteNotification.create({
     data: {
       userId: params.userId,
       type: params.type,
@@ -25,53 +25,41 @@ export async function createNotification(params: CreateNotificationParams) {
 }
 
 export async function getNotifications() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  return prisma.notification.findMany({
-    where: { userId: user.id },
+  return prisma.paletteNotification.findMany({
+    where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 }
 
 export async function markAsRead(notificationId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  await prisma.notification.updateMany({
-    where: { id: notificationId, userId: user.id },
+  await prisma.paletteNotification.updateMany({
+    where: { id: notificationId, userId: session.user.id },
     data: { isRead: true },
   });
 }
 
 export async function markAllAsRead() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  await prisma.notification.updateMany({
-    where: { userId: user.id, isRead: false },
+  await prisma.paletteNotification.updateMany({
+    where: { userId: session.user.id, isRead: false },
     data: { isRead: true },
   });
 }
 
 export async function getUnreadCount() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return 0;
+  const session = await auth();
+  if (!session?.user?.id) return 0;
 
-  return prisma.notification.count({
-    where: { userId: user.id, isRead: false },
+  return prisma.paletteNotification.count({
+    where: { userId: session.user.id, isRead: false },
   });
 }

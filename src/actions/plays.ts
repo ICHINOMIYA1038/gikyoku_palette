@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
@@ -33,7 +33,6 @@ export async function getPlays({
     where.OR = [
       { title: { contains: search, mode: "insensitive" } },
       { synopsis: { contains: search, mode: "insensitive" } },
-      { author: { displayName: { contains: search, mode: "insensitive" } } },
     ];
   }
 
@@ -57,21 +56,34 @@ export async function getPlays({
       : { publishedAt: "desc" as const };
 
   const [plays, total] = await Promise.all([
-    prisma.play.findMany({
+    prisma.palettePlay.findMany({
       where,
       include: {
-        author: { select: { id: true, displayName: true, avatarUrl: true } },
         genres: { include: { genre: true } },
       },
       orderBy,
       skip: (page - 1) * perPage,
       take: perPage,
     }),
-    prisma.play.count({ where }),
+    prisma.palettePlay.count({ where }),
   ]);
 
+  // 作者情報を別途取得（Userはpublic schema）
+  const authorIds = [...new Set(plays.map((p) => p.authorId))];
+  const authors = authorIds.length > 0
+    ? await prisma.$queryRaw<any[]>`
+        SELECT id, name, "displayName", "avatarUrl" FROM "User" WHERE id = ANY(${authorIds})
+      `
+    : [];
+  const authorMap = new Map(authors.map((a: any) => [a.id, a]));
+
+  const playsWithAuthor = plays.map((p) => ({
+    ...p,
+    author: authorMap.get(p.authorId) || { id: p.authorId, displayName: "不明", avatarUrl: null },
+  }));
+
   return {
-    plays,
+    plays: playsWithAuthor,
     total,
     totalPages: Math.ceil(total / perPage),
     currentPage: page,
@@ -79,28 +91,31 @@ export async function getPlays({
 }
 
 export async function getPlayById(id: string) {
-  const play = await prisma.play.findUnique({
+  const play = await prisma.palettePlay.findUnique({
     where: { id },
     include: {
-      author: {
-        select: { id: true, displayName: true, bio: true, avatarUrl: true },
-      },
       genres: { include: { genre: true } },
     },
   });
 
-  return play;
+  if (!play) return null;
+
+  const authors = await prisma.$queryRaw<any[]>`
+    SELECT id, name, "displayName", bio, "avatarUrl" FROM "User" WHERE id = ${play.authorId}
+  `;
+
+  return { ...play, author: authors[0] || null };
 }
 
 export async function incrementViewCount(id: string) {
-  await prisma.play.update({
+  await prisma.palettePlay.update({
     where: { id },
     data: { viewCount: { increment: 1 } },
   });
 }
 
 export async function getGenres() {
-  return prisma.genre.findMany({ orderBy: { id: "asc" } });
+  return prisma.paletteGenre.findMany({ orderBy: { id: "asc" } });
 }
 
 const playUpdateSchema = z.object({
@@ -116,14 +131,11 @@ const playUpdateSchema = z.object({
 });
 
 export async function updatePlay(playId: string, formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const play = await prisma.play.findUnique({ where: { id: playId } });
-  if (!play || play.authorId !== user.id) {
+  const play = await prisma.palettePlay.findUnique({ where: { id: playId } });
+  if (!play || play.authorId !== session.user.id) {
     return { error: "権限がありません" };
   }
 
@@ -143,7 +155,7 @@ export async function updatePlay(playId: string, formData: FormData) {
     return { error: "入力内容に誤りがあります" };
   }
 
-  await prisma.play.update({
+  await prisma.palettePlay.update({
     where: { id: playId },
     data: parsed.data,
   });
@@ -154,19 +166,16 @@ export async function updatePlay(playId: string, formData: FormData) {
 }
 
 export async function togglePublish(playId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const play = await prisma.play.findUnique({ where: { id: playId } });
-  if (!play || play.authorId !== user.id) {
+  const play = await prisma.palettePlay.findUnique({ where: { id: playId } });
+  if (!play || play.authorId !== session.user.id) {
     return { error: "権限がありません" };
   }
 
   const isPublished = !play.isPublished;
-  await prisma.play.update({
+  await prisma.palettePlay.update({
     where: { id: playId },
     data: {
       isPublished,
@@ -177,4 +186,36 @@ export async function togglePublish(playId: string) {
   revalidatePath("/");
   revalidatePath("/dashboard/plays");
   return { success: true, isPublished };
+}
+
+export async function createPlay(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const parsed = playUpdateSchema.safeParse({
+    title: formData.get("title"),
+    synopsis: formData.get("synopsis"),
+    durationMinutes: formData.get("durationMinutes"),
+    castTotal: formData.get("castTotal"),
+    castMale: formData.get("castMale"),
+    castFemale: formData.get("castFemale"),
+    castOther: formData.get("castOther"),
+    feeAmount: formData.get("feeAmount"),
+    isFree: formData.get("isFree") === "true",
+  });
+
+  if (!parsed.success) {
+    return { error: "入力内容に誤りがあります" };
+  }
+
+  const play = await prisma.palettePlay.create({
+    data: {
+      ...parsed.data,
+      authorId: session.user.id,
+      body: (formData.get("body") as string) || null,
+    },
+  });
+
+  revalidatePath("/dashboard/plays");
+  return { success: true, id: play.id };
 }

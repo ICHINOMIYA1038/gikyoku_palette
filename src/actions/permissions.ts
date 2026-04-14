@@ -2,20 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { permissionFormSchema } from "@/lib/validations/permission";
 import { calculatePlatformFee, generatePermissionNumber } from "@/lib/utils";
 import { createNotification } from "@/actions/notifications";
 
 export async function createPermission(playId: string, formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const play = await prisma.play.findUnique({
+  const play = await prisma.palettePlay.findUnique({
     where: { id: playId },
     include: { author: true },
   });
@@ -44,10 +45,10 @@ export async function createPermission(playId: string, formData: FormData) {
   const feeAmount = play.isFree ? 0 : play.feeAmount;
   const platformFee = calculatePlatformFee(feeAmount);
 
-  const permission = await prisma.performancePermission.create({
+  const permission = await prisma.palettePermission.create({
     data: {
       playId,
-      applicantId: user.id,
+      applicantId: session.user.id,
       ...parsed.data,
       startDate: new Date(parsed.data.startDate),
       endDate: new Date(parsed.data.endDate),
@@ -71,18 +72,19 @@ export async function createPermission(playId: string, formData: FormData) {
 }
 
 export async function approvePermission(permissionId: string, message?: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const permission = await prisma.performancePermission.findUnique({
+  const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
     include: { play: true },
   });
 
-  if (!permission || permission.play.authorId !== user.id) {
+  if (!permission || permission.play.authorId !== session.user.id) {
     return { error: "権限がありません" };
   }
 
@@ -94,7 +96,7 @@ export async function approvePermission(permissionId: string, message?: string) 
   const newStatus = isFree ? "permitted" : "approved";
   const permissionNumber = isFree ? generatePermissionNumber() : null;
 
-  await prisma.performancePermission.update({
+  await prisma.palettePermission.update({
     where: { id: permissionId },
     data: {
       status: newStatus,
@@ -125,18 +127,19 @@ export async function rejectPermission(
   reason: string,
   message?: string
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const permission = await prisma.performancePermission.findUnique({
+  const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
     include: { play: true },
   });
 
-  if (!permission || permission.play.authorId !== user.id) {
+  if (!permission || permission.play.authorId !== session.user.id) {
     return { error: "権限がありません" };
   }
 
@@ -144,7 +147,7 @@ export async function rejectPermission(
     return { error: "この申請は既に処理されています" };
   }
 
-  await prisma.performancePermission.update({
+  await prisma.palettePermission.update({
     where: { id: permissionId },
     data: {
       status: "rejected",
@@ -168,14 +171,15 @@ export async function rejectPermission(
 }
 
 export async function getMyApplications() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  return prisma.performancePermission.findMany({
-    where: { applicantId: user.id },
+  return prisma.palettePermission.findMany({
+    where: { applicantId: session.user.id },
     include: {
       play: {
         select: { id: true, title: true, isFree: true, feeAmount: true },
@@ -186,13 +190,14 @@ export async function getMyApplications() {
 }
 
 export async function getPermissionById(id: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const permission = await prisma.performancePermission.findUnique({
+  const permission = await prisma.palettePermission.findUnique({
     where: { id },
     include: {
       play: {
@@ -209,30 +214,31 @@ export async function getPermissionById(id: string) {
 
   // Only allow applicant or play author to view
   if (
-    permission.applicantId !== user.id &&
-    permission.play.authorId !== user.id
+    permission.applicantId !== session.user.id &&
+    permission.play.authorId !== session.user.id
   ) {
     return null;
   }
 
-  return { ...permission, currentUserId: user.id };
+  return { ...permission, currentUserId: session.user.id };
 }
 
 export async function getReceivedApplications(status?: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
   const where: Record<string, unknown> = {
-    play: { authorId: user.id },
+    play: { authorId: session.user.id },
   };
   if (status) {
     where.status = status;
   }
 
-  return prisma.performancePermission.findMany({
+  return prisma.palettePermission.findMany({
     where,
     include: {
       play: { select: { id: true, title: true } },

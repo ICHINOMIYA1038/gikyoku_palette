@@ -1,19 +1,20 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getStripe } from "@/lib/stripe/client";
 
 export async function createExpressAccount() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  let stripeAccount = await prisma.stripeAccount.findUnique({
-    where: { userId: user.id },
+  let stripeAccount = await prisma.paletteStripeAccount.findUnique({
+    where: { userId: session.user.id },
   });
 
   if (!stripeAccount) {
@@ -26,9 +27,9 @@ export async function createExpressAccount() {
       },
     });
 
-    stripeAccount = await prisma.stripeAccount.create({
+    stripeAccount = await prisma.paletteStripeAccount.create({
       data: {
-        userId: user.id,
+        userId: session.user.id,
         stripeAccountId: account.id,
       },
     });
@@ -38,14 +39,15 @@ export async function createExpressAccount() {
 }
 
 export async function createAccountLink() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const stripeAccount = await prisma.stripeAccount.findUnique({
-    where: { userId: user.id },
+  const stripeAccount = await prisma.paletteStripeAccount.findUnique({
+    where: { userId: session.user.id },
   });
 
   if (!stripeAccount) {
@@ -65,14 +67,15 @@ export async function createAccountLink() {
 }
 
 export async function getStripeAccountStatus() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) return null;
 
-  const stripeAccount = await prisma.stripeAccount.findUnique({
-    where: { userId: user.id },
+  const stripeAccount = await prisma.paletteStripeAccount.findUnique({
+    where: { userId: session.user.id },
   });
 
   if (!stripeAccount) return null;
@@ -84,7 +87,7 @@ export async function getStripeAccountStatus() {
   const isComplete = account.charges_enabled && account.payouts_enabled;
 
   if (isComplete && !stripeAccount.onboardingCompleted) {
-    await prisma.stripeAccount.update({
+    await prisma.paletteStripeAccount.update({
       where: { id: stripeAccount.id },
       data: { onboardingCompleted: true },
     });
@@ -99,20 +102,21 @@ export async function getStripeAccountStatus() {
 }
 
 export async function createCheckoutSession(permissionId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  
+  
+    
+  
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const permission = await prisma.performancePermission.findUnique({
+  const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
     include: {
       play: { include: { author: { include: { stripeAccount: true } } } },
     },
   });
 
-  if (!permission || permission.applicantId !== user.id) {
+  if (!permission || permission.applicantId !== session.user.id) {
     return { error: "権限がありません" };
   }
 
@@ -155,7 +159,7 @@ export async function createCheckoutSession(permissionId: string) {
   });
 
   // Save checkout session
-  await prisma.payment.create({
+  await prisma.palettePayment.create({
     data: {
       permissionId,
       stripeCheckoutSessionId: session.id,

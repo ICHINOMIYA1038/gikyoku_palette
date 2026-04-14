@@ -1,34 +1,31 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function getDashboardSummary() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const [publishedPlays, totalViews, pendingApplications, monthlyRevenue] =
     await Promise.all([
-      prisma.play.count({
-        where: { authorId: user.id, isPublished: true },
+      prisma.palettePlay.count({
+        where: { authorId: session.user.id, isPublished: true },
       }),
-      prisma.play.aggregate({
-        where: { authorId: user.id },
+      prisma.palettePlay.aggregate({
+        where: { authorId: session.user.id },
         _sum: { viewCount: true },
       }),
-      prisma.performancePermission.count({
-        where: { play: { authorId: user.id }, status: "pending" },
+      prisma.palettePermission.count({
+        where: { play: { authorId: session.user.id }, status: "pending" },
       }),
-      prisma.payment.aggregate({
+      prisma.palettePayment.aggregate({
         where: {
-          permission: { play: { authorId: user.id } },
+          permission: { play: { authorId: session.user.id } },
           status: "completed",
           completedAt: { gte: startOfMonth },
         },
@@ -45,22 +42,18 @@ export async function getDashboardSummary() {
 }
 
 export async function getSalesSummary() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const payments = await prisma.payment.findMany({
+  const payments = await prisma.palettePayment.findMany({
     where: {
-      permission: { play: { authorId: user.id } },
+      permission: { play: { authorId: session.user.id } },
       status: "completed",
     },
     include: {
       permission: {
         include: {
           play: { select: { title: true } },
-          applicant: { select: { displayName: true } },
         },
       },
     },
