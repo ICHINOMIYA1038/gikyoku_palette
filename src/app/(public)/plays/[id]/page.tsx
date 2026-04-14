@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: play.title,
     description: truncateText(play.synopsis, 160),
     openGraph: {
-      title: `${play.title} | 戯曲上演`,
+      title: `${play.title} | 戯曲パレット`,
       description: truncateText(play.synopsis, 160),
       type: "article",
     },

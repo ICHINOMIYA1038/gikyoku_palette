@@ -14,8 +14,8 @@ const notoSansJP = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: {
-    default: "戯曲上演 - 戯曲の投稿・公開・上演許可プラットフォーム",
-    template: "%s | 戯曲上演",
+    default: "戯曲パレット - 戯曲の投稿・公開・上演許可プラットフォーム",
+    template: "%s | 戯曲パレット",
   },
   description:
     "戯曲を投稿・公開し、上演許可を申請できるプラットフォーム。演劇の脚本を探して、上演許可を簡単に取得できます。",
