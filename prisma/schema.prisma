@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/palette-client"
 }
 
 datasource db {
@@ -8,28 +9,17 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model User {
-  id          String   @id @db.Uuid
-  displayName String   @map("display_name") @db.VarChar(50)
-  bio         String?  @db.Text
-  avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+// ============================================
+// 戯曲パレット専用テーブル（palette_ プレフィックス）
+// User は戯曲図書館の User テーブルを直接参照
+// ============================================
 
-  plays                Play[]
-  sentApplications     PerformancePermission[] @relation("Applicant")
-  stripeAccount        StripeAccount?
-  notifications        Notification[]
-
-  @@map("users")
-}
-
-model Play {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  authorId        String    @map("author_id") @db.Uuid
-  title           String    @db.VarChar(200)
-  synopsis        String    @db.Text
-  body            String?   @db.Text
+model PalettePlay {
+  id              String    @id @default(cuid())
+  authorId        String    @map("author_id")
+  title           String
+  synopsis        String
+  body            String?
   durationMinutes Int       @map("duration_minutes")
   castTotal       Int       @map("cast_total")
   castMale        Int       @default(0) @map("cast_male")
@@ -39,119 +29,113 @@ model Play {
   isFree          Boolean   @default(true) @map("is_free")
   isPublished     Boolean   @default(false) @map("is_published")
   viewCount       Int       @default(0) @map("view_count")
-  publishedAt     DateTime? @map("published_at") @db.Timestamptz
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  publishedAt     DateTime? @map("published_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  author      User                    @relation(fields: [authorId], references: [id])
-  genres      PlayGenre[]
-  permissions PerformancePermission[]
+  genres      PalettePlayGenre[]
+  permissions PalettePermission[]
 
-  @@index([authorId], map: "idx_play_author")
-  @@index([isPublished, publishedAt(sort: Desc)], map: "idx_play_published")
-  @@map("plays")
+  @@index([authorId], map: "idx_palette_play_author")
+  @@index([isPublished, publishedAt(sort: Desc)], map: "idx_palette_play_published")
+  @@map("palette_plays")
 }
 
-model Genre {
+model PaletteGenre {
   id   Int    @id @default(autoincrement())
-  name String @unique @db.VarChar(50)
-  slug String @unique @db.VarChar(50)
+  name String @unique
+  slug String @unique
 
-  plays PlayGenre[]
+  plays PalettePlayGenre[]
 
-  @@map("genres")
+  @@map("palette_genres")
 }
 
-model PlayGenre {
-  playId  String @map("play_id") @db.Uuid
+model PalettePlayGenre {
+  playId  String @map("play_id")
   genreId Int    @map("genre_id")
 
-  play  Play  @relation(fields: [playId], references: [id], onDelete: Cascade)
-  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  play  PalettePlay  @relation(fields: [playId], references: [id], onDelete: Cascade)
+  genre PaletteGenre @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
   @@id([playId, genreId])
-  @@map("play_genres")
+  @@map("palette_play_genres")
 }
 
-model PerformancePermission {
-  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  playId             String    @map("play_id") @db.Uuid
-  applicantId        String    @map("applicant_id") @db.Uuid
-  organizationName   String    @map("organization_name") @db.VarChar(200)
-  representativeName String    @map("representative_name") @db.VarChar(100)
-  performanceTitle   String    @map("performance_title") @db.VarChar(200)
-  startDate          DateTime  @map("start_date") @db.Date
-  endDate            DateTime  @map("end_date") @db.Date
-  venueName          String    @map("venue_name") @db.VarChar(200)
-  venueLocation      String    @map("venue_location") @db.VarChar(300)
+model PalettePermission {
+  id                 String    @id @default(cuid())
+  playId             String    @map("play_id")
+  applicantId        String    @map("applicant_id")
+  organizationName   String    @map("organization_name")
+  representativeName String    @map("representative_name")
+  performanceTitle   String    @map("performance_title")
+  startDate          DateTime  @map("start_date")
+  endDate            DateTime  @map("end_date")
+  venueName          String    @map("venue_name")
+  venueLocation      String    @map("venue_location")
   expectedAudience   Int       @map("expected_audience")
-  ticketType         String    @map("ticket_type") @db.VarChar(10)
+  ticketType         String    @map("ticket_type")
   numPerformances    Int       @default(1) @map("num_performances")
-  applicantMessage   String?   @map("applicant_message") @db.Text
-  status             String    @default("pending") @db.VarChar(20)
-  authorMessage      String?   @map("author_message") @db.Text
-  rejectionReason    String?   @map("rejection_reason") @db.Text
+  applicantMessage   String?   @map("applicant_message")
+  status             String    @default("pending")
+  authorMessage      String?   @map("author_message")
+  rejectionReason    String?   @map("rejection_reason")
   feeAmount          Int       @map("fee_amount")
   platformFee        Int       @default(0) @map("platform_fee")
-  permissionNumber   String?   @unique @map("permission_number") @db.VarChar(20)
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  reviewedAt         DateTime? @map("reviewed_at") @db.Timestamptz
-  paidAt             DateTime? @map("paid_at") @db.Timestamptz
-  expiresAt          DateTime? @map("expires_at") @db.Timestamptz
+  permissionNumber   String?   @unique @map("permission_number")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  reviewedAt         DateTime? @map("reviewed_at")
+  paidAt             DateTime? @map("paid_at")
+  expiresAt          DateTime? @map("expires_at")
 
-  play      Play     @relation(fields: [playId], references: [id])
-  applicant User     @relation("Applicant", fields: [applicantId], references: [id])
-  payment   Payment?
+  play    PalettePlay     @relation(fields: [playId], references: [id])
+  payment PalettePayment?
 
-  @@index([playId], map: "idx_permission_play")
-  @@index([applicantId], map: "idx_permission_applicant")
-  @@index([status], map: "idx_permission_status")
-  @@map("performance_permissions")
+  @@index([playId], map: "idx_palette_permission_play")
+  @@index([applicantId], map: "idx_palette_permission_applicant")
+  @@index([status], map: "idx_palette_permission_status")
+  @@map("palette_permissions")
 }
 
-model Payment {
-  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  permissionId             String    @unique @map("permission_id") @db.Uuid
-  stripeCheckoutSessionId  String?   @map("stripe_checkout_session_id") @db.VarChar(200)
-  stripePaymentIntentId    String?   @map("stripe_payment_intent_id") @db.VarChar(200)
+model PalettePayment {
+  id                       String    @id @default(cuid())
+  permissionId             String    @unique @map("permission_id")
+  stripeCheckoutSessionId  String?   @map("stripe_checkout_session_id")
+  stripePaymentIntentId    String?   @map("stripe_payment_intent_id")
   amount                   Int
   platformFee              Int       @map("platform_fee")
   authorAmount             Int       @map("author_amount")
-  currency                 String    @default("jpy") @db.VarChar(3)
-  status                   String    @default("pending") @db.VarChar(20)
-  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  completedAt              DateTime? @map("completed_at") @db.Timestamptz
+  currency                 String    @default("jpy")
+  status                   String    @default("pending")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  completedAt              DateTime? @map("completed_at")
 
-  permission PerformancePermission @relation(fields: [permissionId], references: [id])
+  permission PalettePermission @relation(fields: [permissionId], references: [id])
 
-  @@map("payments")
+  @@map("palette_payments")
 }
 
-model StripeAccount {
-  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId               String   @unique @map("user_id") @db.Uuid
-  stripeAccountId      String   @map("stripe_account_id") @db.VarChar(100)
+model PaletteStripeAccount {
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
+  stripeAccountId      String   @map("stripe_account_id")
   onboardingCompleted  Boolean  @default(false) @map("onboarding_completed")
-  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id])
-
-  @@map("stripe_accounts")
+  @@map("palette_stripe_accounts")
 }
 
-model Notification {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  type         String   @db.VarChar(30)
-  permissionId String?  @map("permission_id") @db.Uuid
-  title        String   @db.VarChar(200)
-  message      String   @db.Text
+model PaletteNotification {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  type         String
+  permissionId String?  @map("permission_id")
+  title        String
+  message      String
   isRead       Boolean  @default(false) @map("is_read")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId, isRead, createdAt(sort: Desc)], map: "idx_notification_user")
-  @@map("notifications")
+  @@index([userId, isRead, createdAt(sort: Desc)], map: "idx_palette_notification_user")
+  @@map("palette_notifications")
 }
