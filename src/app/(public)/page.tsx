@@ -3,12 +3,14 @@ import Link from "next/link";
 import { getPlays, getGenres, getStats } from "@/actions/plays";
 import { getPopularPlays } from "@/actions/rankings";
 import { getAuthors } from "@/actions/authors";
+import { getNews } from "@/actions/news";
 import { PlayCard } from "@/components/plays/play-card";
 import { AuthorCard } from "@/components/authors/author-card";
 import { SearchBar } from "@/components/plays/search-bar";
 import { FilterPanel } from "@/components/plays/filter-panel";
 import { SortSelector } from "@/components/plays/sort-selector";
 import { Pagination } from "@/components/ui/pagination";
+import { NewsFeed } from "@/components/home/news-feed";
 
 export default async function HomePage({
   searchParams,
@@ -30,6 +32,7 @@ export default async function HomePage({
     genres,
     stats,
     { authors: featuredAuthors },
+    news,
   ] = await Promise.all([
     getPlays({
       search: params.q,
@@ -46,6 +49,7 @@ export default async function HomePage({
     getGenres(),
     getStats(),
     getAuthors({ sort: "plays", perPage: 4 }),
+    getNews({ days: 14, limit: 40 }),
   ]);
 
   return (
@@ -95,6 +99,15 @@ export default async function HomePage({
           </div>
         </div>
       </section>
+
+      {/* ===== News Feed ===== */}
+      {news.length > 0 && (
+        <section className="border-b border-gray-100 py-8 md:py-10">
+          <div className="container mx-auto max-w-3xl px-4">
+            <NewsFeed items={news} />
+          </div>
+        </section>
+      )}
 
       {/* ===== Genre Chips Section ===== */}
       {genres.length > 0 && (
