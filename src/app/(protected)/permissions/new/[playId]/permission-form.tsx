@@ -16,17 +16,20 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
+import { firstString, type FormValues } from "@/lib/form-values";
 
 type FormState = {
   error?: string;
-  fieldErrors?: Record<string, string[]>;
+  fieldErrors?: Record<string, string[] | undefined>;
   success?: boolean;
   permissionId?: string;
+  threadId?: string;
+  /** validation失敗時、直前の入力値を復元するため */
+  values?: FormValues;
 } | null;
 
 export function PermissionForm({
   playId,
-  playTitle,
   isFree,
   feeAmount,
 }: {
@@ -49,6 +52,9 @@ export function PermissionForm({
   }
 
   const [state, action, isPending] = useActionState(formAction, null);
+
+  const v = state?.values;
+  const sv = (key: string): string | undefined => firstString(v?.[key]);
 
   return (
     <form action={action}>
@@ -76,30 +82,57 @@ export function PermissionForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="organizationName">団体名 *</Label>
-              <Input id="organizationName" name="organizationName" required />
+              <Input
+                id="organizationName"
+                name="organizationName"
+                defaultValue={sv("organizationName") ?? ""}
+                required
+              />
               {state?.fieldErrors?.organizationName && (
                 <p className="text-sm text-destructive">{state.fieldErrors.organizationName[0]}</p>
               )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="representativeName">代表者名 *</Label>
-              <Input id="representativeName" name="representativeName" required />
+              <Input
+                id="representativeName"
+                name="representativeName"
+                defaultValue={sv("representativeName") ?? ""}
+                required
+              />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="performanceTitle">公演名 *</Label>
-            <Input id="performanceTitle" name="performanceTitle" required />
+            <Input
+              id="performanceTitle"
+              name="performanceTitle"
+              defaultValue={sv("performanceTitle") ?? ""}
+              required
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="startDate">公演開始日 *</Label>
-              <Input id="startDate" name="startDate" type="date" required />
+              <Input
+                id="startDate"
+                name="startDate"
+                type="date"
+                defaultValue={sv("startDate") ?? ""}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="endDate">公演終了日 *</Label>
-              <Input id="endDate" name="endDate" type="date" required />
+              <Input
+                id="endDate"
+                name="endDate"
+                type="date"
+                defaultValue={sv("endDate") ?? ""}
+                required
+              />
               {state?.fieldErrors?.endDate && (
                 <p className="text-sm text-destructive">{state.fieldErrors.endDate[0]}</p>
               )}
@@ -109,22 +142,43 @@ export function PermissionForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="venueName">会場名 *</Label>
-              <Input id="venueName" name="venueName" required />
+              <Input
+                id="venueName"
+                name="venueName"
+                defaultValue={sv("venueName") ?? ""}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="venueLocation">会場所在地 *</Label>
-              <Input id="venueLocation" name="venueLocation" required />
+              <Input
+                id="venueLocation"
+                name="venueLocation"
+                defaultValue={sv("venueLocation") ?? ""}
+                required
+              />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="expectedAudience">想定観客数 *</Label>
-              <Input id="expectedAudience" name="expectedAudience" type="number" min="1" required />
+              <Input
+                id="expectedAudience"
+                name="expectedAudience"
+                type="number"
+                min="1"
+                defaultValue={sv("expectedAudience") ?? ""}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="ticketType">チケット *</Label>
-              <Select name="ticketType" required>
+              <Select
+                name="ticketType"
+                defaultValue={sv("ticketType") ?? ""}
+                required
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="選択" />
                 </SelectTrigger>
@@ -136,7 +190,14 @@ export function PermissionForm({
             </div>
             <div className="space-y-2">
               <Label htmlFor="numPerformances">上演回数 *</Label>
-              <Input id="numPerformances" name="numPerformances" type="number" min="1" defaultValue="1" required />
+              <Input
+                id="numPerformances"
+                name="numPerformances"
+                type="number"
+                min="1"
+                defaultValue={sv("numPerformances") ?? "1"}
+                required
+              />
             </div>
           </div>
 
@@ -147,6 +208,7 @@ export function PermissionForm({
               name="applicantMessage"
               placeholder="執筆者への意気込みやメッセージなど"
               rows={4}
+              defaultValue={sv("applicantMessage") ?? ""}
             />
           </div>
         </CardContent>

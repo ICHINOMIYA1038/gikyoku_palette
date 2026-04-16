@@ -11,8 +11,17 @@ import { GenreSelector } from "@/components/plays/genre-selector";
 import { CoverImageUpload } from "@/components/plays/cover-image-upload";
 import { BodyTypeSelector } from "@/components/plays/body-type-selector";
 import type { PalettePlay, PaletteGenre } from "@prisma/client";
+import { firstString, type FormValues } from "@/lib/form-values";
 
-type FormState = { error?: string; success?: boolean } | null;
+type FormState =
+  | {
+      error?: string;
+      success?: boolean;
+      fieldErrors?: Record<string, string[] | undefined>;
+      /** validation失敗時、直前の入力値を復元するために返される */
+      values?: FormValues;
+    }
+  | null;
 
 type PlayWithGenres = PalettePlay & {
   genres: { genre: PaletteGenre }[];
@@ -36,6 +45,14 @@ export function PlayEditForm({
 
   const [state, action, isPending] = useActionState(formAction, null);
 
+  // validation 失敗時は直前入力を優先、そうでなければ DB の値を表示
+  const v = state?.values;
+  const sv = (key: string, fallback: string | number | null | undefined): string | number => {
+    const fromLast = firstString(v?.[key]);
+    if (fromLast !== undefined) return fromLast;
+    return (fallback ?? "") as string | number;
+  };
+
   return (
     <form action={action}>
       <Card>
@@ -51,54 +68,54 @@ export function PlayEditForm({
 
           <div className="space-y-2">
             <Label htmlFor="title">タイトル</Label>
-            <Input id="title" name="title" defaultValue={play.title} required />
+            <Input id="title" name="title" defaultValue={sv("title", play.title)} required />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="synopsis">あらすじ</Label>
-            <Textarea id="synopsis" name="synopsis" defaultValue={play.synopsis} rows={4} required />
+            <Textarea id="synopsis" name="synopsis" defaultValue={sv("synopsis", play.synopsis)} rows={4} required />
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">本文</label>
             <BodyTypeSelector
-              initialType={(play.bodyType as "text" | "pdf") || "text"}
-              initialBody={play.body || ""}
-              initialPdfUrl={play.bodyPdfUrl}
-              initialOrientation={(play.bodyOrientation as "portrait" | "landscape") || "portrait"}
+              initialType={(firstString(v?.bodyType) as "text" | "pdf") || (play.bodyType as "text" | "pdf") || "text"}
+              initialBody={firstString(v?.body) ?? play.body ?? ""}
+              initialPdfUrl={firstString(v?.bodyPdfUrl) ?? play.bodyPdfUrl}
+              initialOrientation={(firstString(v?.bodyOrientation) as "portrait" | "landscape") || (play.bodyOrientation as "portrait" | "landscape") || "portrait"}
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="durationMinutes">上演時間（分）</Label>
-              <Input id="durationMinutes" name="durationMinutes" type="number" defaultValue={play.durationMinutes} required />
+              <Input id="durationMinutes" name="durationMinutes" type="number" defaultValue={sv("durationMinutes", play.durationMinutes)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="castTotal">出演人数（合計）</Label>
-              <Input id="castTotal" name="castTotal" type="number" defaultValue={play.castTotal} required />
+              <Input id="castTotal" name="castTotal" type="number" defaultValue={sv("castTotal", play.castTotal)} required />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="castMale">男性</Label>
-              <Input id="castMale" name="castMale" type="number" defaultValue={play.castMale} />
+              <Input id="castMale" name="castMale" type="number" defaultValue={sv("castMale", play.castMale)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="castFemale">女性</Label>
-              <Input id="castFemale" name="castFemale" type="number" defaultValue={play.castFemale} />
+              <Input id="castFemale" name="castFemale" type="number" defaultValue={sv("castFemale", play.castFemale)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="castOther">不問</Label>
-              <Input id="castOther" name="castOther" type="number" defaultValue={play.castOther} />
+              <Input id="castOther" name="castOther" type="number" defaultValue={sv("castOther", play.castOther)} />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="feeAmount">上演料（円、0で無料）</Label>
-              <Input id="feeAmount" name="feeAmount" type="number" defaultValue={play.feeAmount} min="0" />
+              <Input id="feeAmount" name="feeAmount" type="number" defaultValue={sv("feeAmount", play.feeAmount)} min="0" />
             </div>
             <div className="flex items-end">
               <input type="hidden" name="isFree" value={play.feeAmount === 0 ? "true" : "false"} />

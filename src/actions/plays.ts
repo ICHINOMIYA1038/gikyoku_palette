@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { extractFormValues } from "@/lib/form-values";
 import { z } from "zod";
 
 type GetPlaysParams = {
@@ -201,12 +202,12 @@ export async function updatePlay(playId: string, formData: FormData) {
 
   if (!parsed.success) {
     const fieldErrors = parsed.error.flatten().fieldErrors;
-    // 最初のエラーをサマリーとして表示（どの項目が問題か分かるように）
     const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
     const summary = first
       ? `${first[0]}: ${first[1]![0]}`
       : "入力内容に誤りがあります";
-    return { error: summary, fieldErrors };
+    // 失敗時は入力内容を values で返し、クライアント側で defaultValue に使えるようにする
+    return { error: summary, fieldErrors, values: extractFormValues(formData) };
   }
 
   const genreIds = formData.getAll("genreIds").map(Number) as number[];

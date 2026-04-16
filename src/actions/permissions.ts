@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { permissionFormSchema } from "@/lib/validations/permission";
 import { calculatePlatformFee, generatePermissionNumber } from "@/lib/utils";
 import { createNotification } from "@/actions/notifications";
+import { extractFormValues } from "@/lib/form-values";
 import type { Prisma } from "@prisma/client";
 import type { SystemMessageKind } from "@/types";
 
@@ -182,7 +183,12 @@ export async function createPermission(playId: string, formData: FormData) {
   });
 
   if (!parsed.success) {
-    return { error: "入力内容に誤りがあります", fieldErrors: parsed.error.flatten().fieldErrors };
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
+    const summary = first
+      ? `${first[0]}: ${first[1]![0]}`
+      : "入力内容に誤りがあります";
+    return { error: summary, fieldErrors, values: extractFormValues(formData) };
   }
 
   const feeAmount = play.isFree ? 0 : play.feeAmount;
@@ -510,9 +516,15 @@ export async function resubmitPermission(
   });
 
   if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
+    const summary = first
+      ? `${first[0]}: ${first[1]![0]}`
+      : "入力内容に誤りがあります";
     return {
-      error: "入力内容に誤りがあります",
-      fieldErrors: parsed.error.flatten().fieldErrors,
+      error: summary,
+      fieldErrors,
+      values: extractFormValues(formData),
     };
   }
 

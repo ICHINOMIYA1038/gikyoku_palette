@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { firstString, type FormValues } from "@/lib/form-values";
 
 type DefaultValues = {
   organizationName: string;
@@ -30,7 +31,12 @@ type DefaultValues = {
 };
 
 type FormState =
-  | { error?: string; fieldErrors?: Record<string, string[]>; success?: boolean }
+  | {
+      error?: string;
+      fieldErrors?: Record<string, string[] | undefined>;
+      success?: boolean;
+      values?: FormValues;
+    }
   | null;
 
 /**
@@ -59,6 +65,13 @@ export function EditPermissionForm({
 
   const [state, formAction, pending] = useActionState(action, null);
 
+  // validation失敗時は直前入力を優先、そうでなければ defaultValues を表示
+  const v = state?.values;
+  const sv = (key: string, fallback: string | number): string | number => {
+    const fromLast = firstString(v?.[key]);
+    return fromLast !== undefined ? fromLast : fallback;
+  };
+
   return (
     <form action={formAction}>
       <Card>
@@ -72,7 +85,7 @@ export function EditPermissionForm({
               <Input
                 id="organizationName"
                 name="organizationName"
-                defaultValue={defaultValues.organizationName}
+                defaultValue={sv("organizationName", defaultValues.organizationName)}
                 required
               />
             </div>
@@ -81,7 +94,7 @@ export function EditPermissionForm({
               <Input
                 id="representativeName"
                 name="representativeName"
-                defaultValue={defaultValues.representativeName}
+                defaultValue={sv("representativeName", defaultValues.representativeName)}
                 required
               />
             </div>
@@ -92,7 +105,7 @@ export function EditPermissionForm({
             <Input
               id="performanceTitle"
               name="performanceTitle"
-              defaultValue={defaultValues.performanceTitle}
+              defaultValue={sv("performanceTitle", defaultValues.performanceTitle)}
               required
             />
           </div>
@@ -104,7 +117,7 @@ export function EditPermissionForm({
                 id="startDate"
                 name="startDate"
                 type="date"
-                defaultValue={defaultValues.startDate}
+                defaultValue={sv("startDate", defaultValues.startDate)}
                 required
               />
             </div>
@@ -114,7 +127,7 @@ export function EditPermissionForm({
                 id="endDate"
                 name="endDate"
                 type="date"
-                defaultValue={defaultValues.endDate}
+                defaultValue={sv("endDate", defaultValues.endDate)}
                 required
               />
               {state?.fieldErrors?.endDate && (
@@ -129,7 +142,7 @@ export function EditPermissionForm({
               <Input
                 id="venueName"
                 name="venueName"
-                defaultValue={defaultValues.venueName}
+                defaultValue={sv("venueName", defaultValues.venueName)}
                 required
               />
             </div>
@@ -138,7 +151,7 @@ export function EditPermissionForm({
               <Input
                 id="venueLocation"
                 name="venueLocation"
-                defaultValue={defaultValues.venueLocation}
+                defaultValue={sv("venueLocation", defaultValues.venueLocation)}
                 required
               />
             </div>
@@ -152,13 +165,17 @@ export function EditPermissionForm({
                 name="expectedAudience"
                 type="number"
                 min="1"
-                defaultValue={defaultValues.expectedAudience}
+                defaultValue={sv("expectedAudience", defaultValues.expectedAudience)}
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="ticketType">チケット *</Label>
-              <Select name="ticketType" defaultValue={defaultValues.ticketType} required>
+              <Select
+                name="ticketType"
+                defaultValue={String(sv("ticketType", defaultValues.ticketType))}
+                required
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="選択" />
                 </SelectTrigger>
@@ -175,7 +192,7 @@ export function EditPermissionForm({
                 name="numPerformances"
                 type="number"
                 min="1"
-                defaultValue={defaultValues.numPerformances}
+                defaultValue={sv("numPerformances", defaultValues.numPerformances)}
                 required
               />
             </div>
@@ -188,6 +205,7 @@ export function EditPermissionForm({
               name="applicantMessage"
               placeholder="どこを修正したか・補足説明など"
               rows={4}
+              defaultValue={firstString(v?.applicantMessage) ?? ""}
             />
           </div>
         </CardContent>
