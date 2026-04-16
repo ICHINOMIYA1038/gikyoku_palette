@@ -11,12 +11,18 @@ import { GenreSelector } from "@/components/plays/genre-selector";
 import { CoverImageUpload } from "@/components/plays/cover-image-upload";
 import { BodyTypeSelector } from "@/components/plays/body-type-selector";
 import type { PaletteGenre } from "@prisma/client";
+import { firstString, type FormValues } from "@/lib/form-values";
 
-type FormState = { error?: string; success?: boolean; id?: string } | null;
+type FormState = {
+  error?: string;
+  success?: boolean;
+  id?: string;
+  fieldErrors?: Record<string, string[] | undefined>;
+  values?: FormValues;
+} | null;
 
 export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
   const router = useRouter();
-  const [feeAmount, setFeeAmount] = useState(0);
   const [coverImageUrl, setCoverImageUrl] = useState("");
 
   async function formAction(
@@ -34,8 +40,23 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
     }
   }, [state?.success, router]);
 
+  const v = state?.values;
+  const sv = (key: string, fallback = ""): string => {
+    const fromLast = firstString(v?.[key]);
+    return fromLast !== undefined ? fromLast : fallback;
+  };
+
+  // 有料/無料のトグル: 前回入力値があればそれ、無ければ0
+  const [feeAmount, setFeeAmount] = useState<number>(() => {
+    const raw = firstString(v?.feeAmount);
+    return raw ? Number(raw) || 0 : 0;
+  });
+
+  // validation 失敗のたびに form を再mountして defaultValue を反映
+  const formKey = state?.values ? JSON.stringify(state.values).length : 0;
+
   return (
-    <form action={action} className="space-y-0">
+    <form action={action} className="space-y-0" key={formKey}>
       {/* カバー画像 */}
       <div className="pb-8 border-b border-gray-200">
         <CoverImageUpload onUpload={setCoverImageUrl} />
@@ -49,15 +70,29 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
         </h2>
         <div className="space-y-2">
           <Label htmlFor="title">タイトル</Label>
-          <Input id="title" name="title" required />
+          <Input id="title" name="title" defaultValue={sv("title")} required />
         </div>
         <div className="space-y-2">
           <Label htmlFor="synopsis">あらすじ</Label>
-          <Textarea id="synopsis" name="synopsis" rows={4} required />
+          <Textarea
+            id="synopsis"
+            name="synopsis"
+            rows={4}
+            defaultValue={sv("synopsis")}
+            required
+          />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">本文</label>
-          <BodyTypeSelector />
+          <BodyTypeSelector
+            initialType={(firstString(v?.bodyType) as "text" | "pdf") || "text"}
+            initialBody={firstString(v?.body) ?? ""}
+            initialPdfUrl={firstString(v?.bodyPdfUrl) ?? null}
+            initialOrientation={
+              (firstString(v?.bodyOrientation) as "portrait" | "landscape") ||
+              "portrait"
+            }
+          />
         </div>
       </div>
 
@@ -73,6 +108,7 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               id="durationMinutes"
               name="durationMinutes"
               type="number"
+              defaultValue={sv("durationMinutes")}
               required
             />
           </div>
@@ -82,6 +118,7 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               id="castTotal"
               name="castTotal"
               type="number"
+              defaultValue={sv("castTotal")}
               required
             />
           </div>
@@ -93,7 +130,7 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               id="castMale"
               name="castMale"
               type="number"
-              defaultValue={0}
+              defaultValue={sv("castMale", "0")}
             />
           </div>
           <div className="space-y-2">
@@ -102,7 +139,7 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               id="castFemale"
               name="castFemale"
               type="number"
-              defaultValue={0}
+              defaultValue={sv("castFemale", "0")}
             />
           </div>
           <div className="space-y-2">
@@ -111,7 +148,7 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               id="castOther"
               name="castOther"
               type="number"
-              defaultValue={0}
+              defaultValue={sv("castOther", "0")}
             />
           </div>
         </div>
@@ -129,7 +166,7 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               id="feeAmount"
               name="feeAmount"
               type="number"
-              defaultValue={0}
+              defaultValue={sv("feeAmount", "0")}
               min={0}
               onChange={(e) => setFeeAmount(Number(e.target.value))}
             />

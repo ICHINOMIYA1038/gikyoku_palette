@@ -303,7 +303,12 @@ export async function createPlay(formData: FormData) {
   });
 
   if (!parsed.success) {
-    return { error: "入力内容に誤りがあります" };
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
+    const summary = first
+      ? `${first[0]}: ${first[1]![0]}`
+      : "入力内容に誤りがあります";
+    return { error: summary, fieldErrors, values: extractFormValues(formData) };
   }
 
   const { coverImageUrl: coverUrl, bodyPdfUrl, ...restData } = parsed.data;
