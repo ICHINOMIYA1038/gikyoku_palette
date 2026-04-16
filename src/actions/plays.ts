@@ -143,12 +143,23 @@ export async function getStats() {
   };
 }
 
+/**
+ * アップロード API は dev では "/api/storage/..." 相対パス、
+ * 本番では "https://..." 絶対URL を返すため、両方を許容する。
+ */
+const uploadedUrl = z
+  .string()
+  .refine(
+    (v) => v === "" || v.startsWith("/") || /^https?:\/\//.test(v),
+    "URLの形式が不正です"
+  );
+
 const playSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください").max(200),
   synopsis: z.string().min(1, "あらすじを入力してください"),
   body: z.string().max(500000, "本文は50万文字以内にしてください").optional().default(""),
   bodyType: z.enum(["text", "pdf"]).default("text"),
-  bodyPdfUrl: z.string().url().optional().or(z.literal("")),
+  bodyPdfUrl: uploadedUrl.optional().or(z.literal("")),
   bodyOrientation: z.enum(["portrait", "landscape"]).default("portrait"),
   durationMinutes: z.coerce.number().int().positive("上演時間を入力してください"),
   castTotal: z.coerce.number().int().positive("出演人数を入力してください"),
@@ -157,7 +168,7 @@ const playSchema = z.object({
   castOther: z.coerce.number().int().min(0),
   feeAmount: z.coerce.number().int().min(0),
   isFree: z.coerce.boolean(),
-  coverImageUrl: z.string().url().optional().or(z.literal("")),
+  coverImageUrl: uploadedUrl.optional().or(z.literal("")),
 });
 
 export async function updatePlay(playId: string, formData: FormData) {
@@ -189,7 +200,13 @@ export async function updatePlay(playId: string, formData: FormData) {
   });
 
   if (!parsed.success) {
-    return { error: "入力内容に誤りがあります" };
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    // 最初のエラーをサマリーとして表示（どの項目が問題か分かるように）
+    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
+    const summary = first
+      ? `${first[0]}: ${first[1]![0]}`
+      : "入力内容に誤りがあります";
+    return { error: summary, fieldErrors };
   }
 
   const genreIds = formData.getAll("genreIds").map(Number) as number[];
