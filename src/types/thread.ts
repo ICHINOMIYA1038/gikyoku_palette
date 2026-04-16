@@ -85,6 +85,8 @@ export type ThreadDetail = {
     paidAt: string | null;
     expiresAt: string | null;
   };
+  /** 作家側の Stripe Connect 連携状態。有料作品の決済導線判断に使用 */
+  authorStripeReady: boolean;
   attachments: AttachmentSummary[];
   messages: ThreadMessage[];
 };

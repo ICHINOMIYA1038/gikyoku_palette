@@ -153,6 +153,13 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
   const userMap = await fetchUsersByIds([otherId]);
   const other = userToThread(userMap.get(otherId), otherId);
 
+  // 作家の Stripe Connect 状態（有料作品で申請者が決済可能か判断）
+  const stripeAccount = await prisma.paletteStripeAccount.findUnique({
+    where: { userId: thread.permission.play.authorId },
+    select: { onboardingCompleted: true },
+  });
+  const authorStripeReady = !!stripeAccount?.onboardingCompleted;
+
   // 自分宛未読を既読マーク（自分が送っていない text messages のみ）
   await prisma.paletteMessage.updateMany({
     where: {
@@ -195,6 +202,7 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
       paidAt: thread.permission.paidAt?.toISOString() ?? null,
       expiresAt: thread.permission.expiresAt?.toISOString() ?? null,
     },
+    authorStripeReady,
     attachments: thread.permission.attachments.map(toAttachmentSummary),
     messages: thread.messages.map<ThreadMessage>((m) => ({
       id: m.id,

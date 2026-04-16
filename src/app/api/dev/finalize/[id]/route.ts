@@ -1,18 +1,16 @@
 /**
  * Dev-only payment finalizer.
  *
- * Stripe Checkout redirects here on success (set by the dev checkout route).
- * Mirrors the logic of the production `/api/webhooks/stripe` handler so we
- * can finalize payments without running Stripe CLI for webhook forwarding.
+ * Stripe Checkout のリダイレクト先（success_url）に指定して、
+ * payment_status=paid のセッションを検証し、共通 finalize ロジックを呼ぶ。
+ * 本番では Stripe webhook 経由で同じ finalizePayment() が走るため挙動は等価。
  *
- * Returns 404 outside development.
+ * NODE_ENV=development 以外では 404。
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getStripe } from "@/lib/stripe/client";
-import { generatePermissionNumber } from "@/lib/utils";
-import { createNotification } from "@/actions/notifications";
+import { finalizePayment } from "@/lib/payment-finalize";
 
 export async function GET(
   req: NextRequest,
@@ -29,7 +27,6 @@ export async function GET(
   }
 
   const checkoutSession = await getStripe().checkout.sessions.retrieve(sessionId);
-
   if (checkoutSession.payment_status !== "paid") {
     return NextResponse.json(
       { error: `checkout not paid: ${checkoutSession.payment_status}` },
@@ -42,56 +39,14 @@ export async function GET(
       ? checkoutSession.payment_intent
       : checkoutSession.payment_intent?.id || null;
 
-  const existing = await prisma.palettePermission.findUnique({
-    where: { id: permissionId },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "permission not found" }, { status: 404 });
-  }
-
-  // Idempotent: only transition once.
-  if (existing.status === "permitted") {
-    return NextResponse.redirect(
-      new URL(`/permissions/${permissionId}?payment=success`, req.url)
-    );
-  }
-
-  await prisma.palettePayment.updateMany({
-    where: { stripeCheckoutSessionId: sessionId },
-    data: {
-      stripePaymentIntentId: paymentIntentId,
-      status: "completed",
-      completedAt: new Date(),
-    },
-  });
-
-  const permission = await prisma.palettePermission.update({
-    where: { id: permissionId },
-    data: {
-      status: "permitted",
-      permissionNumber: generatePermissionNumber(),
-      paidAt: new Date(),
-    },
-    include: { play: true },
-  });
-
-  await createNotification({
-    userId: permission.applicantId,
-    type: "payment_completed",
+  const result = await finalizePayment({
     permissionId,
-    title: "上演が許可されました",
-    message: `「${permission.play.title}」の上演料の決済が完了し、正式に上演が許可されました。許可証をダウンロードできます。`,
+    stripeCheckoutSessionId: sessionId,
+    stripePaymentIntentId: paymentIntentId,
   });
 
-  await createNotification({
-    userId: permission.play.authorId,
-    type: "payment_completed",
-    permissionId,
-    title: "上演料の決済が完了しました",
-    message: `「${permission.play.title}」の上演料の決済が完了しました。`,
-  });
-
-  return NextResponse.redirect(
-    new URL(`/permissions/${permissionId}?payment=success`, req.url)
-  );
+  const dest = result.threadId
+    ? `/threads/${result.threadId}?payment=success`
+    : `/permissions/${permissionId}?payment=success`;
+  return NextResponse.redirect(new URL(dest, req.url));
 }

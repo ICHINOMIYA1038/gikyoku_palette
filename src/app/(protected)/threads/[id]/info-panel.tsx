@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { Calendar, MapPin, Users, Banknote, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ThreadDetail } from "@/types/thread";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { PaymentButton } from "./payment-button";
 
 /**
  * スレッド右ペインの企画情報パネル。
@@ -86,17 +86,12 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
       {/* 決済ボタン（申請者のみ、approved状態） */}
       {isApplicant && permission.status === "approved" && (
         <Section label="決済">
-          <p className="mb-2 text-xs text-gray-500">
-            {permission.expiresAt &&
-              `${formatDate(permission.expiresAt)} までに決済してください`}
-          </p>
-          <Button
-            size="sm"
-            className="w-full"
-            render={<Link href={`/permissions/${permission.id}/pay`} />}
-          >
-            上演料を支払う
-          </Button>
+          <PaymentButton
+            permissionId={permission.id}
+            feeAmount={permission.feeAmount}
+            expiresAt={permission.expiresAt}
+            authorStripeReady={detail.authorStripeReady}
+          />
         </Section>
       )}
 

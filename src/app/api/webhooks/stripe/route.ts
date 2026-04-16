@@ -1,27 +1,28 @@
+/**
+ * 本番 Stripe webhook 受信エンドポイント。
+ * checkout.session.completed を受けて共通 finalize ロジックを実行する。
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe/client";
-import { prisma } from "@/lib/db";
-import { generatePermissionNumber } from "@/lib/utils";
-import { createNotification } from "@/actions/notifications";
+import { finalizePayment } from "@/lib/payment-finalize";
 import type Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const sig = request.headers.get("stripe-signature");
-
   if (!sig) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
   let event: Stripe.Event;
-
   try {
     event = getStripe().webhooks.constructEvent(
       body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET!
     );
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { error: "Webhook signature verification failed" },
       { status: 400 }
@@ -33,46 +34,15 @@ export async function POST(request: NextRequest) {
     const permissionId = checkoutSession.metadata?.permissionId;
 
     if (permissionId) {
-      // Update payment
-      await prisma.palettePayment.updateMany({
-        where: { stripeCheckoutSessionId: checkoutSession.id },
-        data: {
-          stripePaymentIntentId:
-            typeof checkoutSession.payment_intent === "string"
-              ? checkoutSession.payment_intent
-              : checkoutSession.payment_intent?.id || null,
-          status: "completed",
-          completedAt: new Date(),
-        },
-      });
+      const paymentIntentId =
+        typeof checkoutSession.payment_intent === "string"
+          ? checkoutSession.payment_intent
+          : checkoutSession.payment_intent?.id || null;
 
-      // Update permission to permitted
-      const permissionNumber = generatePermissionNumber();
-      const permission = await prisma.palettePermission.update({
-        where: { id: permissionId },
-        data: {
-          status: "permitted",
-          permissionNumber,
-          paidAt: new Date(),
-        },
-        include: { play: true },
-      });
-
-      // Notify both parties
-      await createNotification({
-        userId: permission.applicantId,
-        type: "payment_completed",
+      await finalizePayment({
         permissionId,
-        title: "上演が許可されました",
-        message: `「${permission.play.title}」の上演料の決済が完了し、正式に上演が許可されました。許可証をダウンロードできます。`,
-      });
-
-      await createNotification({
-        userId: permission.play.authorId,
-        type: "payment_completed",
-        permissionId,
-        title: "上演料の決済が完了しました",
-        message: `「${permission.play.title}」の上演料の決済が完了しました。`,
+        stripeCheckoutSessionId: checkoutSession.id,
+        stripePaymentIntentId: paymentIntentId,
       });
     }
   }
