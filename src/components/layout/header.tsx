@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
+import { NotificationBell } from "./notification-bell";
 
 export async function Header() {
   const session = await auth();
@@ -19,6 +20,7 @@ export async function Header() {
         <nav className="flex items-center gap-3">
           {session?.user ? (
             <div className="flex items-center gap-3 text-sm">
+              <NotificationBell />
               <Link href="/dashboard" className="text-gray-500 hover:text-gray-900 transition-colors">
                 {session.user.name || "マイページ"}
               </Link>

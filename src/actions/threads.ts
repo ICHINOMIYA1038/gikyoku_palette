@@ -309,12 +309,14 @@ export async function sendMessage(
   });
 
   const recipientId = isAuthor ? thread.permission.applicantId : thread.permission.play.authorId;
+  // 連投で通知が爆発しないよう、未読の new_message があれば集約する
   await createNotification({
     userId: recipientId,
     type: "new_message",
     permissionId: thread.permission.id,
     title: "新しいメッセージ",
     message: `「${thread.permission.play.title}」のスレッドに新しいメッセージがあります`,
+    coalesce: true,
   });
 
   revalidatePath(`/threads/${threadId}`);
