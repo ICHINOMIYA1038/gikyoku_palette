@@ -9,10 +9,10 @@ import {
 } from "@/actions/permissions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { ThreadDetail } from "@/types/thread";
+import type { PermissionInThread } from "@/types/thread";
 
 type Props = {
-  permission: ThreadDetail["permission"];
+  permission: PermissionInThread;
   onActed: () => void;
 };
 

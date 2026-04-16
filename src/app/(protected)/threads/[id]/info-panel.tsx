@@ -13,6 +13,8 @@ import { PaymentButton } from "./payment-button";
  */
 export function InfoPanel({ detail }: { detail: ThreadDetail }) {
   const { permission, role } = detail;
+  // inquiry スレッドでは表示する情報がないので呼び出し側で抑止する
+  if (!permission) return null;
   const isApplicant = role === "applicant";
   const showPaymentCta =
     isApplicant && permission.status === "approved";
@@ -60,7 +62,7 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
             permissionId={permission.id}
             feeAmount={permission.feeAmount}
             expiresAt={permission.expiresAt}
-            authorStripeReady={detail.authorStripeReady}
+            authorStripeReady={detail.authorStripeReady ?? false}
           />
         </div>
       )}

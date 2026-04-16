@@ -6,10 +6,10 @@ import { Pencil, Trash2 } from "lucide-react";
 import { withdrawPermission } from "@/actions/permissions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { ThreadDetail } from "@/types/thread";
+import type { PermissionInThread } from "@/types/thread";
 
 type Props = {
-  permission: ThreadDetail["permission"];
+  permission: PermissionInThread;
   onActed: () => void;
 };
 

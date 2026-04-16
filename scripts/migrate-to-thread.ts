@@ -153,10 +153,24 @@ async function migrateOne(p: LegacyPermission) {
 
   // thread + messages を1トランザクションで作成
   const lastEvent = events[events.length - 1];
+  // 参加者を取得（permission スレッドは applicant + 作家）
+  const playRow = await prisma.palettePlay.findUnique({
+    where: { id: (await getPlayIdOf(p.id))! },
+    select: { authorId: true },
+  });
+  const authorId = playRow?.authorId ?? p.applicant_id;
+  const [pp1, pp2] =
+    p.applicant_id < authorId
+      ? [p.applicant_id, authorId]
+      : [authorId, p.applicant_id];
+
   await prisma.$transaction(async (tx) => {
     const thread = await tx.paletteThread.create({
       data: {
         permissionId: p.id,
+        kind: "permission",
+        participant1: pp1,
+        participant2: pp2,
         lastMessage: summarize(lastEvent.content),
         lastAt: lastEvent.createdAt,
         createdAt: p.created_at,

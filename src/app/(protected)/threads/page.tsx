@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, MessageSquare } from "lucide-react";
 import { getMyThreads } from "@/actions/threads";
 import { PermissionStatusBadge } from "@/components/permissions/status-badge";
 
@@ -38,9 +38,9 @@ export default async function ThreadsPage() {
                 className="block p-4 transition-colors hover:bg-gray-50"
               >
                 <div className="flex items-center gap-4">
-                  {/* 作品カバー */}
+                  {/* 左アイコン: 作品カバー or 問い合わせアイコン */}
                   <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-gray-100">
-                    {t.play.coverImageUrl ? (
+                    {t.kind === "permission" && t.play?.coverImageUrl ? (
                       <Image
                         src={t.play.coverImageUrl}
                         alt=""
@@ -48,9 +48,13 @@ export default async function ThreadsPage() {
                         height={56}
                         className="h-full w-full object-cover"
                       />
-                    ) : (
+                    ) : t.kind === "permission" && t.play ? (
                       <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
                         {t.play.title.slice(0, 1)}
+                      </div>
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-pink-50">
+                        <MessageSquare className="h-5 w-5 text-pink-300" />
                       </div>
                     )}
                   </div>
@@ -58,14 +62,35 @@ export default async function ThreadsPage() {
                   {/* 本文 */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-gray-900">
-                        {t.play.title}
-                      </p>
-                      <PermissionStatusBadge status={t.permission.status} size="sm" />
+                      {t.kind === "permission" && t.play ? (
+                        <>
+                          <p className="truncate text-sm font-medium text-gray-900">
+                            {t.play.title}
+                          </p>
+                          {t.permission && (
+                            <PermissionStatusBadge
+                              status={t.permission.status}
+                              size="sm"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <p className="truncate text-sm font-medium text-gray-900">
+                          {t.other.name}
+                        </p>
+                      )}
                     </div>
                     <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
-                      <span className="text-gray-400">{t.role === "author" ? "申請者" : "作家"}</span>
-                      <span className="truncate">{t.other.name}</span>
+                      {t.kind === "permission" ? (
+                        <>
+                          <span className="text-gray-400">
+                            {t.role === "author" ? "申請者" : "作家"}
+                          </span>
+                          <span className="truncate">{t.other.name}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">問い合わせ</span>
+                      )}
                     </p>
                     <p className="mt-1 truncate text-sm text-gray-500">
                       {t.lastMessage || "（メッセージなし）"}

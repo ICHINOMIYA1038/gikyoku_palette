@@ -211,8 +211,19 @@ export async function createPermission(playId: string, formData: FormData) {
       },
     });
 
+    // permission スレッドの participants は applicant + 作家 を sort 順で
+    const [p1, p2] = userId < play.authorId
+      ? [userId, play.authorId]
+      : [play.authorId, userId];
+
     const thread = await tx.paletteThread.create({
-      data: { permissionId: permission.id, lastMessage: "申請を送信しました" },
+      data: {
+        permissionId: permission.id,
+        kind: "permission",
+        participant1: p1,
+        participant2: p2,
+        lastMessage: "申請を送信しました",
+      },
     });
 
     await appendSystemMessage(tx, {

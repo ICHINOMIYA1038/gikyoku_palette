@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MessageSquare } from "lucide-react";
 import { MessageTimeline } from "./message-timeline";
 import { Composer } from "./composer";
 import { InfoPanel } from "./info-panel";
@@ -17,10 +17,7 @@ const TERMINAL_STATUSES: PermissionStatus[] = ["rejected", "withdrawn", "expired
 
 /**
  * スレッド画面のクライアントルート。
- *
- * - 初期データはサーバから渡される（getThreadDetail で既読化済み）
- * - 5秒ポーリングで最新の detail を取り直す（メッセージ差分も含む）
- * - 送信は server action（composer内）→ ポーリングで反映
+ * permission スレッドと inquiry スレッドの両方をレンダリングする。
  */
 export function ThreadView({ initial }: { initial: ThreadDetail }) {
   const [detail, setDetail] = useState<ThreadDetail>(initial);
@@ -46,9 +43,9 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
     };
   }, [refresh]);
 
-  const { role, other, play, permission } = detail;
-  const status = permission.status as PermissionStatus;
-  const isTerminal = TERMINAL_STATUSES.includes(status);
+  const isPermission = detail.kind === "permission" && detail.permission;
+  const status = detail.permission?.status as PermissionStatus | undefined;
+  const isTerminal = !!status && TERMINAL_STATUSES.includes(status);
 
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-col">
@@ -63,47 +60,63 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0 flex-1">
-            <Link
-              href={`/plays/${play.id}`}
-              className="block truncate text-sm font-medium text-gray-900 hover:text-pink-600"
-            >
-              {play.title}
-            </Link>
-            <p className="truncate text-xs text-gray-500">
-              {role === "author" ? "申請者: " : "作家: "}
-              {other.name}
-            </p>
+            {isPermission && detail.play ? (
+              <>
+                <Link
+                  href={`/plays/${detail.play.id}`}
+                  className="block truncate text-sm font-medium text-gray-900 hover:text-pink-600"
+                >
+                  {detail.play.title}
+                </Link>
+                <p className="truncate text-xs text-gray-500">
+                  {detail.role === "author" ? "申請者: " : "作家: "}
+                  {detail.other.name}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="flex items-center gap-1.5 truncate text-sm font-medium text-gray-900">
+                  <MessageSquare className="h-3.5 w-3.5 text-pink-400" />
+                  {detail.other.name}
+                </p>
+                <p className="truncate text-xs text-gray-500">
+                  作家への問い合わせ
+                </p>
+              </>
+            )}
           </div>
-          <PermissionStatusBadge status={status} />
+          {status && <PermissionStatusBadge status={status} />}
         </div>
       </header>
 
-      {/* 本体: タイムライン + インフォパネル */}
+      {/* 本体 */}
       <div className="container mx-auto flex w-full max-w-5xl flex-1 gap-6 px-4 py-6 lg:flex-row">
-        {/* タイムライン */}
         <div className="flex min-h-0 flex-1 flex-col">
-          {/* mobile only: 企画詳細を折りたたみで露出 */}
-          <details className="mb-4 rounded-lg border border-gray-200 bg-white lg:hidden">
-            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-gray-700 marker:hidden">
-              <span className="flex items-center justify-between">
-                企画情報を見る
-                <span aria-hidden className="text-gray-400 transition-transform [details[open]_&]:rotate-180">▾</span>
-              </span>
-            </summary>
-            <div className="border-t border-gray-100 p-2">
-              <InfoPanel detail={detail} />
-            </div>
-          </details>
+          {/* permission スレッドのみ: モバイル折りたたみで企画情報 */}
+          {isPermission && (
+            <details className="mb-4 rounded-lg border border-gray-200 bg-white lg:hidden">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-gray-700 marker:hidden">
+                <span className="flex items-center justify-between">
+                  企画情報を見る
+                  <span aria-hidden className="text-gray-400">▾</span>
+                </span>
+              </summary>
+              <div className="border-t border-gray-100 p-2">
+                <InfoPanel detail={detail} />
+              </div>
+            </details>
+          )}
 
           <MessageTimeline messages={detail.messages} />
-          {/* アクション帯：作家には承認系、申請者には取り下げ・再提出 */}
-          {role === "author" && (
+
+          {/* アクション帯：permission スレッドのみ */}
+          {isPermission && detail.role === "author" && detail.permission && (
             <AuthorActions permission={detail.permission} onActed={refresh} />
           )}
-          {role === "applicant" && (
+          {isPermission && detail.role === "applicant" && detail.permission && (
             <ApplicantActions permission={detail.permission} onActed={refresh} />
           )}
-          {/* 入力欄 */}
+
           <Composer
             threadId={detail.id}
             disabled={isTerminal}
@@ -111,14 +124,15 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
           />
         </div>
 
-        {/* インフォパネル (lg以上) */}
-        <aside className="hidden w-80 shrink-0 lg:block">
-          <div className="sticky top-32">
-            <InfoPanel detail={detail} />
-          </div>
-        </aside>
+        {/* インフォパネル (lg以上) — permission スレッドのみ */}
+        {isPermission && (
+          <aside className="hidden w-80 shrink-0 lg:block">
+            <div className="sticky top-32">
+              <InfoPanel detail={detail} />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );
 }
-

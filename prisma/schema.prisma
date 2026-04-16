@@ -108,18 +108,27 @@ model PalettePermission {
   @@map("palette_permissions")
 }
 
-/// 1 申請 = 1 スレッド。参加者は permission.play.authorId と permission.applicantId から導出。
+/// スレッド本体。次の2 種類を共存させる。
+///   - kind='permission': permissionId が設定されている。1申請=1スレッド。
+///   - kind='inquiry'   : permissionId は null、参加者ペアで一意。
+/// participant1/participant2 は常に lex order でソートして格納し、
+/// inquiry の重複防止 (PARTIAL UNIQUE) と list クエリの高速化に使う。
 model PaletteThread {
   id           String   @id @default(cuid())
-  permissionId String   @unique @map("permission_id")
+  permissionId String?  @unique @map("permission_id")
+  kind         String   @default("permission")
+  participant1 String   @map("participant1")
+  participant2 String   @map("participant2")
   lastMessage  String?  @map("last_message")
   lastAt       DateTime @default(now()) @map("last_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  permission PalettePermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permission PalettePermission? @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   messages   PaletteMessage[]
 
   @@index([lastAt(sort: Desc)], map: "idx_palette_thread_last_at")
+  @@index([participant1, lastAt(sort: Desc)], map: "idx_palette_thread_p1")
+  @@index([participant2, lastAt(sort: Desc)], map: "idx_palette_thread_p2")
   @@map("palette_threads")
 }
 

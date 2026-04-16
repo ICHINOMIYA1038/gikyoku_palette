@@ -31,17 +31,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "threadId is required" }, { status: 400 });
   }
 
-  // 認可: スレッドの参加者であること
+  // 認可: スレッドの参加者であること（permission/inquiry 両対応）
   const thread = await prisma.paletteThread.findUnique({
     where: { id: threadId },
-    include: { permission: { select: { applicantId: true, play: { select: { authorId: true } } } } },
   });
   if (!thread) {
     return NextResponse.json({ error: "thread not found" }, { status: 404 });
   }
   const isParticipant =
-    thread.permission.applicantId === userId ||
-    thread.permission.play.authorId === userId;
+    thread.participant1 === userId || thread.participant2 === userId;
   if (!isParticipant) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
