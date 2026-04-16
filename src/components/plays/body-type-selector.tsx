@@ -13,7 +13,14 @@ type Props = {
   initialReadingDirection?: ReadingDirection;
 };
 
-async function detectPdfOrientation(file: File): Promise<Orientation> {
+/**
+ * PDF の1ページ目から向きと読み進める方向を推定する。
+ * 縦書きは文字アイテムの transform 行列で回転が入っている（t[0]≈0 & |t[1]|≫0）
+ * ので、そのパターンが過半数ならば rtl と判定する。
+ */
+async function detectPdfMeta(
+  file: File
+): Promise<{ orientation: Orientation; readingDirection: ReadingDirection }> {
   try {
     const pdfjsLib = await import("pdfjs-dist");
     pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -22,10 +29,33 @@ async function detectPdfOrientation(file: File): Promise<Orientation> {
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const page = await pdf.getPage(1);
     const viewport = page.getViewport({ scale: 1 });
+    const orientation: Orientation =
+      viewport.width > viewport.height ? "landscape" : "portrait";
 
-    return viewport.width > viewport.height ? "landscape" : "portrait";
+    // 文字単位の回転を集計
+    let vertical = 0;
+    let horizontal = 0;
+    try {
+      const content = await page.getTextContent();
+      for (const it of content.items) {
+        if (!("transform" in it)) continue;
+        const t = (it as { transform: number[] }).transform;
+        // horizontal: t[0] と t[3] が主、t[1]/t[2] はほぼ 0
+        // vertical (90° 回転): t[1] or t[2] が主、t[0]/t[3] はほぼ 0
+        const horizScale = Math.abs(t[0]);
+        const vertSkew = Math.abs(t[1]) + Math.abs(t[2]);
+        if (vertSkew > horizScale) vertical++;
+        else horizontal++;
+      }
+    } catch {
+      // textContent 取得失敗はスキャンPDFの可能性。判定不能として ltr
+    }
+
+    const readingDirection: ReadingDirection =
+      vertical > horizontal ? "rtl" : "ltr";
+    return { orientation, readingDirection };
   } catch {
-    return "portrait";
+    return { orientation: "portrait", readingDirection: "ltr" };
   }
 }
 
@@ -63,9 +93,10 @@ export function BodyTypeSelector({
     setUploading(true);
     setPdfFileName(file.name);
     try {
-      // PDFの向きを自動判定
-      const detectedOrientation = await detectPdfOrientation(file);
-      setOrientation(detectedOrientation);
+      // PDFの向き＆読み進め方向を自動判定
+      const meta = await detectPdfMeta(file);
+      setOrientation(meta.orientation);
+      setReadingDirection(meta.readingDirection);
 
       const fd = new FormData();
       fd.append("file", file);
@@ -114,7 +145,7 @@ export function BodyTypeSelector({
       <input type="hidden" name="bodyOrientation" value={orientation} />
       <input type="hidden" name="readingDirection" value={readingDirection} />
 
-      {/* 読む方向（縦書き戯曲は右→左に進む） */}
+      {/* 読む方向。PDF アップロード時に自動判定されるが、明示指定も可 */}
       <label className="flex items-center gap-2 text-sm text-gray-600">
         <input
           type="checkbox"
@@ -125,6 +156,9 @@ export function BodyTypeSelector({
           className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-400"
         />
         縦書き（右から左へ進む）
+        <span className="text-xs text-gray-400">
+          ※ PDF は自動判定、必要に応じて切替
+        </span>
       </label>
 
       {/* テキスト入力 */}
