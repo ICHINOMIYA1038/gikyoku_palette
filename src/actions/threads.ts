@@ -237,14 +237,20 @@ function toAttachmentSummary(a: {
   };
 }
 
-/** メッセージ送信 */
-export async function sendMessage(threadId: string, content: string) {
+/** メッセージ送信。attachmentIds を渡すと、未紐付けの添付を新メッセージに連結する。 */
+export async function sendMessage(
+  threadId: string,
+  content: string,
+  attachmentIds: string[] = []
+) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
   const trimmed = content.trim();
-  if (!trimmed) return { error: "メッセージを入力してください" };
+  if (!trimmed && attachmentIds.length === 0) {
+    return { error: "メッセージまたはファイルを入力してください" };
+  }
   if (trimmed.length > MESSAGE_MAX_LENGTH) {
     return { error: `メッセージは${MESSAGE_MAX_LENGTH}文字以内です` };
   }
@@ -260,30 +266,48 @@ export async function sendMessage(threadId: string, content: string) {
   const isAuthor = thread.permission.play.authorId === userId;
   const isApplicant = thread.permission.applicantId === userId;
   if (!isAuthor && !isApplicant) return { error: "権限がありません" };
-
-  // 終了状態ではメッセージ送信不可
   if (["rejected", "withdrawn", "expired"].includes(thread.permission.status)) {
     return { error: "このスレッドは終了しています" };
   }
 
-  const preview = summarizeForPreview(trimmed);
+  // 添付IDの所有者チェック（アップロード本人かつ未紐付け）
+  if (attachmentIds.length > 0) {
+    const attachments = await prisma.paletteAttachment.findMany({
+      where: { id: { in: attachmentIds } },
+    });
+    const invalid = attachments.find(
+      (a) => a.uploaderId !== userId || a.messageId || a.permissionId
+    );
+    if (invalid || attachments.length !== attachmentIds.length) {
+      return { error: "添付ファイルの権限が不正です" };
+    }
+  }
 
-  await prisma.$transaction([
-    prisma.paletteMessage.create({
+  const preview = trimmed
+    ? summarizeForPreview(trimmed)
+    : `📎 添付ファイル ${attachmentIds.length}件`;
+
+  await prisma.$transaction(async (tx) => {
+    const message = await tx.paletteMessage.create({
       data: {
         threadId,
         senderId: userId,
         type: "text",
-        content: trimmed,
+        content: trimmed || "",
       },
-    }),
-    prisma.paletteThread.update({
+    });
+    if (attachmentIds.length > 0) {
+      await tx.paletteAttachment.updateMany({
+        where: { id: { in: attachmentIds } },
+        data: { messageId: message.id },
+      });
+    }
+    await tx.paletteThread.update({
       where: { id: threadId },
       data: { lastMessage: preview, lastAt: new Date() },
-    }),
-  ]);
+    });
+  });
 
-  // 相手に通知（アプリ内）
   const recipientId = isAuthor ? thread.permission.applicantId : thread.permission.play.authorId;
   await createNotification({
     userId: recipientId,

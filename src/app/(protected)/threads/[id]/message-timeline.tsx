@@ -11,10 +11,13 @@ import {
   Trash2,
   CheckCheck,
   MessageSquare,
+  FileText,
+  Download,
 } from "lucide-react";
-import type { ThreadMessage } from "@/types/thread";
+import type { ThreadMessage, AttachmentSummary } from "@/types/thread";
 import type { SystemMessageKind } from "@/types";
 import type { LucideIcon } from "lucide-react";
+import { formatBytes } from "@/lib/attachment-policy";
 
 /**
  * タイムライン表示。
@@ -82,20 +85,30 @@ function DateSeparator({ iso }: { iso: string }) {
 
 function TextBubble({ message }: { message: ThreadMessage }) {
   const time = formatTime(message.createdAt);
+  const hasText = message.content.trim().length > 0;
   return (
     <div className={`flex ${message.isMine ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[80%] ${message.isMine ? "order-2" : ""}`}>
+      <div className={`max-w-[80%] space-y-1 ${message.isMine ? "order-2" : ""}`}>
+        {hasText && (
+          <div
+            className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+              message.isMine
+                ? "rounded-br-md bg-pink-500 text-white"
+                : "rounded-bl-md border border-gray-100 bg-white text-gray-800 shadow-sm"
+            }`}
+          >
+            {message.content}
+          </div>
+        )}
+        {message.attachments.length > 0 && (
+          <div className={`flex flex-col gap-1 ${message.isMine ? "items-end" : "items-start"}`}>
+            {message.attachments.map((a) => (
+              <AttachmentChip key={a.id} attachment={a} mine={message.isMine} />
+            ))}
+          </div>
+        )}
         <div
-          className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-            message.isMine
-              ? "rounded-br-md bg-pink-500 text-white"
-              : "rounded-bl-md border border-gray-100 bg-white text-gray-800 shadow-sm"
-          }`}
-        >
-          {message.content}
-        </div>
-        <div
-          className={`mt-0.5 flex items-center gap-1 ${
+          className={`flex items-center gap-1 ${
             message.isMine ? "justify-end" : ""
           }`}
         >
@@ -106,6 +119,53 @@ function TextBubble({ message }: { message: ThreadMessage }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function AttachmentChip({
+  attachment,
+  mine,
+}: {
+  attachment: AttachmentSummary;
+  mine: boolean;
+}) {
+  const isImage = attachment.mimeType.startsWith("image/");
+  const url = `/api/attachments/${attachment.id}`;
+
+  if (isImage) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="block max-w-[260px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm hover:opacity-90"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={attachment.fileName} className="h-auto w-full" />
+        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] text-gray-500">
+          <span className="truncate">{attachment.fileName}</span>
+          <span>{formatBytes(attachment.fileSize)}</span>
+        </div>
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs shadow-sm transition-colors ${
+        mine
+          ? "border border-pink-300 bg-pink-50 text-pink-900 hover:bg-pink-100"
+          : "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
+      }`}
+    >
+      <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+      <span className="max-w-[200px] truncate font-medium">{attachment.fileName}</span>
+      <span className="text-gray-400">{formatBytes(attachment.fileSize)}</span>
+      <Download className="h-3 w-3 text-gray-400" />
+    </a>
   );
 }
 
