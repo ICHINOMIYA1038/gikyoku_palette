@@ -1,9 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
-import { MessageCircle, User } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { getMyThreads } from "@/actions/threads";
-import { PERMISSION_STATUS_LABELS } from "@/types";
-import type { PermissionStatus } from "@/types";
+import { PermissionStatusBadge } from "@/components/permissions/status-badge";
 
 export const metadata = { title: "メッセージ" };
 export const dynamic = "force-dynamic";
@@ -62,10 +61,10 @@ export default async function ThreadsPage() {
                       <p className="truncate text-sm font-medium text-gray-900">
                         {t.play.title}
                       </p>
-                      <StatusBadge status={t.permission.status} />
+                      <PermissionStatusBadge status={t.permission.status} size="sm" />
                     </div>
                     <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
-                      {t.role === "author" ? "申請者: " : "作家: "}
+                      <span className="text-gray-400">{t.role === "author" ? "申請者" : "作家"}</span>
                       <span className="truncate">{t.other.name}</span>
                     </p>
                     <p className="mt-1 truncate text-sm text-gray-500">
@@ -102,24 +101,4 @@ function formatDate(iso: string): string {
     return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
   }
   return d.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
-}
-
-const STATUS_STYLES: Record<PermissionStatus, string> = {
-  pending: "bg-blue-50 text-blue-700",
-  approved: "bg-amber-50 text-amber-700",
-  permitted: "bg-green-50 text-green-700",
-  rejected: "bg-gray-100 text-gray-500",
-  expired: "bg-gray-100 text-gray-500",
-  revision_requested: "bg-orange-50 text-orange-700",
-  withdrawn: "bg-gray-100 text-gray-500",
-};
-
-function StatusBadge({ status }: { status: PermissionStatus }) {
-  return (
-    <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
-      {PERMISSION_STATUS_LABELS[status]}
-    </span>
-  );
 }

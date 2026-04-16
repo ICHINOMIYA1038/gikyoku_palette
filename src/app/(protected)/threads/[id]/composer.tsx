@@ -229,7 +229,7 @@ export function Composer({ threadId, disabled, onSent }: Props) {
         </button>
       </div>
       <p className="mt-1 text-right text-[10px] text-gray-400">
-        Ctrl+Enter で送信 ・ 添付は PDF / 画像 / Office / MP4 / テキスト
+        Ctrl + Enter で送信
       </p>
     </div>
   );

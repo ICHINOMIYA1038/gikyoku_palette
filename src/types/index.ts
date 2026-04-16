@@ -22,12 +22,12 @@ export type NotificationType =
 export type TicketType = "paid" | "free";
 
 export const PERMISSION_STATUS_LABELS: Record<PermissionStatus, string> = {
-  pending: "申請中",
-  approved: "承認済み（決済待ち）",
+  pending: "審査中",
+  approved: "決済待ち",
   permitted: "許可済み",
   rejected: "却下",
   expired: "期限切れ",
-  revision_requested: "修正依頼中",
+  revision_requested: "要修正",
   withdrawn: "取り下げ",
 };
 

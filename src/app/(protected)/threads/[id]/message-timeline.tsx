@@ -172,18 +172,63 @@ function AttachmentChip({
 /** システムメッセージの種類ごとのアイコン＋色＋整形ロジック */
 type SystemStyle = {
   icon: LucideIcon;
-  color: string; // text color
-  bg: string; // background color
+  /** strong tone は border / bg を強めに塗る（重要イベント用） */
+  strong: boolean;
+  color: string;
+  bg: string;
+  border: string;
 };
 
 const SYSTEM_STYLES: Record<SystemMessageKind, SystemStyle> = {
-  permission_submitted: { icon: Send, color: "text-blue-600", bg: "bg-blue-50" },
-  permission_resubmitted: { icon: RefreshCw, color: "text-blue-600", bg: "bg-blue-50" },
-  permission_approved: { icon: Check, color: "text-green-600", bg: "bg-green-50" },
-  permission_rejected: { icon: X, color: "text-red-600", bg: "bg-red-50" },
-  revision_requested: { icon: AlertCircle, color: "text-orange-600", bg: "bg-orange-50" },
-  payment_completed: { icon: DollarSign, color: "text-green-600", bg: "bg-green-50" },
-  permission_withdrawn: { icon: Trash2, color: "text-gray-500", bg: "bg-gray-100" },
+  permission_submitted: {
+    icon: Send,
+    strong: false,
+    color: "text-sky-600",
+    bg: "bg-sky-50",
+    border: "border-sky-200",
+  },
+  permission_resubmitted: {
+    icon: RefreshCw,
+    strong: false,
+    color: "text-sky-600",
+    bg: "bg-sky-50",
+    border: "border-sky-200",
+  },
+  permission_approved: {
+    icon: Check,
+    strong: true,
+    color: "text-emerald-700",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
+  },
+  permission_rejected: {
+    icon: X,
+    strong: true,
+    color: "text-rose-700",
+    bg: "bg-rose-50",
+    border: "border-rose-300",
+  },
+  revision_requested: {
+    icon: AlertCircle,
+    strong: false,
+    color: "text-orange-600",
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+  },
+  payment_completed: {
+    icon: DollarSign,
+    strong: true,
+    color: "text-emerald-700",
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
+  },
+  permission_withdrawn: {
+    icon: Trash2,
+    strong: false,
+    color: "text-slate-500",
+    bg: "bg-slate-100",
+    border: "border-slate-200",
+  },
 };
 
 function SystemCard({ message }: { message: ThreadMessage }) {
@@ -192,19 +237,44 @@ function SystemCard({ message }: { message: ThreadMessage }) {
   const Icon = style.icon;
   const detail = formatSystemDetail(message);
 
+  if (style.strong) {
+    // 重要イベント: 横幅広めに、塗りで主張
+    return (
+      <div className="my-4 flex justify-center">
+        <div
+          className={`flex w-full max-w-md items-start gap-3 rounded-xl border ${style.border} ${style.bg} px-4 py-3 text-sm shadow-sm`}
+        >
+          <span
+            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white ${style.color} ring-1 ${style.border}`}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className={`font-medium ${style.color}`}>{message.content}</p>
+            {detail && <p className="mt-0.5 text-xs text-gray-600">{detail}</p>}
+            <p className="mt-1.5 text-[10px] text-gray-400">
+              {formatTime(message.createdAt)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 通常イベント
   return (
     <div className="my-3 flex justify-center">
       <div
-        className={`flex max-w-md items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-sm`}
+        className={`flex max-w-md items-start gap-2 rounded-lg border ${style.border} ${style.bg} px-3 py-2 text-xs`}
       >
         <span
-          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${style.bg} ${style.color}`}
+          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white ${style.color}`}
         >
           <Icon className="h-3.5 w-3.5" />
         </span>
         <div className="min-w-0">
           <p className="font-medium text-gray-800">{message.content}</p>
-          {detail && <p className="mt-0.5 text-gray-500">{detail}</p>}
+          {detail && <p className="mt-0.5 text-gray-600">{detail}</p>}
           <p className="mt-1 text-[10px] text-gray-400">
             {formatTime(message.createdAt)}
           </p>

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { MessageTimeline } from "./message-timeline";
@@ -10,10 +9,11 @@ import { InfoPanel } from "./info-panel";
 import { AuthorActions } from "./author-actions";
 import { ApplicantActions } from "./applicant-actions";
 import type { ThreadDetail } from "@/types/thread";
-import { PERMISSION_STATUS_LABELS } from "@/types";
 import type { PermissionStatus } from "@/types";
+import { PermissionStatusBadge } from "@/components/permissions/status-badge";
 
 const POLL_INTERVAL_MS = 5_000;
+const TERMINAL_STATUSES: PermissionStatus[] = ["rejected", "withdrawn", "expired"];
 
 /**
  * スレッド画面のクライアントルート。
@@ -48,7 +48,7 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
 
   const { role, other, play, permission } = detail;
   const status = permission.status as PermissionStatus;
-  const isTerminal = ["rejected", "withdrawn", "expired"].includes(status);
+  const isTerminal = TERMINAL_STATUSES.includes(status);
 
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-col">
@@ -74,7 +74,7 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
               {other.name}
             </p>
           </div>
-          <StatusPill status={status} />
+          <PermissionStatusBadge status={status} />
         </div>
       </header>
 
@@ -82,6 +82,19 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
       <div className="container mx-auto flex w-full max-w-5xl flex-1 gap-6 px-4 py-6 lg:flex-row">
         {/* タイムライン */}
         <div className="flex min-h-0 flex-1 flex-col">
+          {/* mobile only: 企画詳細を折りたたみで露出 */}
+          <details className="mb-4 rounded-lg border border-gray-200 bg-white lg:hidden">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-gray-700 marker:hidden">
+              <span className="flex items-center justify-between">
+                企画情報を見る
+                <span aria-hidden className="text-gray-400 transition-transform [details[open]_&]:rotate-180">▾</span>
+              </span>
+            </summary>
+            <div className="border-t border-gray-100 p-2">
+              <InfoPanel detail={detail} />
+            </div>
+          </details>
+
           <MessageTimeline messages={detail.messages} />
           {/* アクション帯：作家には承認系、申請者には取り下げ・再提出 */}
           {role === "author" && (
@@ -109,22 +122,3 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
   );
 }
 
-const STATUS_STYLES: Record<PermissionStatus, string> = {
-  pending: "bg-blue-50 text-blue-700",
-  approved: "bg-amber-50 text-amber-700",
-  permitted: "bg-green-50 text-green-700",
-  rejected: "bg-gray-100 text-gray-500",
-  expired: "bg-gray-100 text-gray-500",
-  revision_requested: "bg-orange-50 text-orange-700",
-  withdrawn: "bg-gray-100 text-gray-500",
-};
-
-function StatusPill({ status }: { status: PermissionStatus }) {
-  return (
-    <span
-      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[status]}`}
-    >
-      {PERMISSION_STATUS_LABELS[status]}
-    </span>
-  );
-}

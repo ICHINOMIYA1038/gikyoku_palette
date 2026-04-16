@@ -1,26 +1,12 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { getReceivedApplications } from "@/actions/permissions";
-import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
-import { PERMISSION_STATUS_LABELS } from "@/types";
 import type { PermissionStatus } from "@/types";
+import { PermissionStatusBadge } from "@/components/permissions/status-badge";
 
 export const metadata = { title: "申請管理" };
 export const dynamic = "force-dynamic";
-
-const STATUS_VARIANT: Record<
-  PermissionStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  pending: "outline",
-  approved: "secondary",
-  permitted: "default",
-  rejected: "destructive",
-  expired: "destructive",
-  revision_requested: "outline",
-  withdrawn: "secondary",
-};
 
 export default async function DashboardPermissionsPage() {
   const applications = await getReceivedApplications();
@@ -57,12 +43,7 @@ export default async function DashboardPermissionsPage() {
                         {formatDate(app.createdAt)}
                       </p>
                     </div>
-                    <Badge
-                      variant={STATUS_VARIANT[status]}
-                      className="shrink-0"
-                    >
-                      {PERMISSION_STATUS_LABELS[status]}
-                    </Badge>
+                    <PermissionStatusBadge status={status} />
                   </div>
                 </Link>
               </li>
