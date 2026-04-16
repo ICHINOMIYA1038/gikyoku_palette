@@ -155,6 +155,39 @@ const uploadedUrl = z
     "URLの形式が不正です"
   );
 
+/**
+ * FormData から playSchema 用の入力オブジェクトを組み立てる。
+ * bodyType を切り替えたときに存在しない field（body / bodyPdfUrl）が
+ * null になって "expected string, received null" で落ちるため、
+ * ここでまとめて空文字・undefined に正規化する。
+ */
+function readPlayInput(formData: FormData) {
+  const s = (k: string) => {
+    const v = formData.get(k);
+    return typeof v === "string" ? v : "";
+  };
+  const opt = (k: string) => {
+    const v = formData.get(k);
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  };
+  return {
+    title: s("title"),
+    synopsis: s("synopsis"),
+    body: s("body"),
+    bodyType: opt("bodyType") || "text",
+    bodyPdfUrl: opt("bodyPdfUrl"),
+    bodyOrientation: opt("bodyOrientation") || "portrait",
+    durationMinutes: s("durationMinutes"),
+    castTotal: s("castTotal"),
+    castMale: opt("castMale") || "0",
+    castFemale: opt("castFemale") || "0",
+    castOther: opt("castOther") || "0",
+    feeAmount: opt("feeAmount") || "0",
+    isFree: formData.get("isFree") === "true",
+    coverImageUrl: opt("coverImageUrl"),
+  };
+}
+
 const playSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください").max(200),
   synopsis: z.string().min(1, "あらすじを入力してください"),
@@ -181,24 +214,7 @@ export async function updatePlay(playId: string, formData: FormData) {
     return { error: "権限がありません" };
   }
 
-  const coverImageRaw = formData.get("coverImageUrl") as string | null;
-  const bodyPdfUrlRaw = formData.get("bodyPdfUrl") as string | null;
-  const parsed = playSchema.safeParse({
-    title: formData.get("title"),
-    synopsis: formData.get("synopsis"),
-    body: formData.get("body"),
-    bodyType: formData.get("bodyType") || "text",
-    bodyPdfUrl: bodyPdfUrlRaw || undefined,
-    bodyOrientation: formData.get("bodyOrientation") || "portrait",
-    durationMinutes: formData.get("durationMinutes"),
-    castTotal: formData.get("castTotal"),
-    castMale: formData.get("castMale"),
-    castFemale: formData.get("castFemale"),
-    castOther: formData.get("castOther"),
-    feeAmount: formData.get("feeAmount"),
-    isFree: formData.get("isFree") === "true",
-    coverImageUrl: coverImageRaw || undefined,
-  });
+  const parsed = playSchema.safeParse(readPlayInput(formData));
 
   if (!parsed.success) {
     const fieldErrors = parsed.error.flatten().fieldErrors;
@@ -283,24 +299,7 @@ export async function createPlay(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const coverImageRaw = formData.get("coverImageUrl") as string | null;
-  const bodyPdfUrlRaw = formData.get("bodyPdfUrl") as string | null;
-  const parsed = playSchema.safeParse({
-    title: formData.get("title"),
-    synopsis: formData.get("synopsis"),
-    body: formData.get("body"),
-    bodyType: formData.get("bodyType") || "text",
-    bodyPdfUrl: bodyPdfUrlRaw || undefined,
-    bodyOrientation: formData.get("bodyOrientation") || "portrait",
-    durationMinutes: formData.get("durationMinutes"),
-    castTotal: formData.get("castTotal"),
-    castMale: formData.get("castMale"),
-    castFemale: formData.get("castFemale"),
-    castOther: formData.get("castOther"),
-    feeAmount: formData.get("feeAmount"),
-    isFree: formData.get("isFree") === "true",
-    coverImageUrl: coverImageRaw || undefined,
-  });
+  const parsed = playSchema.safeParse(readPlayInput(formData));
 
   if (!parsed.success) {
     const fieldErrors = parsed.error.flatten().fieldErrors;
