@@ -64,19 +64,34 @@ export async function getReviews(playId: string, page = 1, perPage = 10) {
     prisma.paletteReview.count({ where: { playId } }),
   ]);
 
-  // ユーザー情報を raw SQL で取得
+  // ユーザー情報を raw SQL で取得（displayName が null の場合は name で fallback）
   const userIds = [...new Set(reviews.map(r => r.userId))];
-  let userMap = new Map<string, any>();
+  let userMap = new Map<string, { id: string; displayName: string; avatarUrl: string | null }>();
   if (userIds.length > 0) {
-    const users = await prisma.$queryRaw<any[]>`
-      SELECT id, "displayName", "avatarUrl" FROM "User" WHERE id = ANY(${userIds})
+    const users = await prisma.$queryRaw<
+      Array<{ id: string; displayName: string | null; name: string | null; avatarUrl: string | null }>
+    >`
+      SELECT id, "displayName", name, "avatarUrl" FROM "User" WHERE id = ANY(${userIds})
     `;
-    userMap = new Map(users.map((u: any) => [u.id, u]));
+    userMap = new Map(
+      users.map((u) => [
+        u.id,
+        {
+          id: u.id,
+          displayName: u.displayName || u.name || "ユーザー",
+          avatarUrl: u.avatarUrl,
+        },
+      ])
+    );
   }
 
-  const reviewsWithUser = reviews.map(r => ({
+  const reviewsWithUser = reviews.map((r) => ({
     ...r,
-    user: userMap.get(r.userId) || { id: r.userId, displayName: "不明", avatarUrl: null },
+    user: userMap.get(r.userId) || {
+      id: r.userId,
+      displayName: "不明",
+      avatarUrl: null,
+    },
   }));
 
   return { reviews: reviewsWithUser, total, totalPages: Math.ceil(total / perPage) };
