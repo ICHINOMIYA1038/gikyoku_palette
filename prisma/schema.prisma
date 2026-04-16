@@ -75,10 +75,12 @@ model PalettePermission {
   expectedAudience   Int       @map("expected_audience")
   ticketType         String    @map("ticket_type")
   numPerformances    Int       @default(1) @map("num_performances")
-  applicantMessage   String?   @map("applicant_message")
+  // status: pending | approved | permitted | rejected | revision_requested | withdrawn | expired
   status             String    @default("pending")
-  authorMessage      String?   @map("author_message")
   rejectionReason    String?   @map("rejection_reason")
+  revisionReason     String?   @map("revision_reason")
+  withdrawnAt        DateTime? @map("withdrawn_at")
+  withdrawnReason    String?   @map("withdrawn_reason")
   feeAmount          Int       @map("fee_amount")
   platformFee        Int       @default(0) @map("platform_fee")
   permissionNumber   String?   @unique @map("permission_number")
@@ -87,13 +89,71 @@ model PalettePermission {
   paidAt             DateTime? @map("paid_at")
   expiresAt          DateTime? @map("expires_at")
 
-  play    PalettePlay     @relation(fields: [playId], references: [id])
-  payment PalettePayment?
+  play        PalettePlay         @relation(fields: [playId], references: [id])
+  payment     PalettePayment?
+  thread      PaletteThread?
+  attachments PaletteAttachment[]
 
   @@index([playId], map: "idx_palette_permission_play")
   @@index([applicantId], map: "idx_palette_permission_applicant")
   @@index([status], map: "idx_palette_permission_status")
   @@map("palette_permissions")
+}
+
+/// 1 申請 = 1 スレッド。参加者は permission.play.authorId と permission.applicantId から導出。
+model PaletteThread {
+  id           String   @id @default(cuid())
+  permissionId String   @unique @map("permission_id")
+  lastMessage  String?  @map("last_message")
+  lastAt       DateTime @default(now()) @map("last_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  permission PalettePermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  messages   PaletteMessage[]
+
+  @@index([lastAt(sort: Desc)], map: "idx_palette_thread_last_at")
+  @@map("palette_threads")
+}
+
+/// スレッド内のメッセージ。
+/// - type='text'  : ユーザー発話（senderId 必須）
+/// - type='system': システムイベント（senderId=null、metadata.kind で種別）
+model PaletteMessage {
+  id        String    @id @default(cuid())
+  threadId  String    @map("thread_id")
+  senderId  String?   @map("sender_id")
+  type      String    @default("text")
+  content   String
+  metadata  Json?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  thread      PaletteThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  attachments PaletteAttachment[]
+
+  @@index([threadId, createdAt], map: "idx_palette_message_thread")
+  @@index([senderId, readAt], map: "idx_palette_message_unread")
+  @@map("palette_messages")
+}
+
+/// 添付ファイル。messageId / permissionId の排他リレーション（アプリ層で担保）。
+model PaletteAttachment {
+  id           String   @id @default(cuid())
+  messageId    String?  @map("message_id")
+  permissionId String?  @map("permission_id")
+  uploaderId   String   @map("uploader_id")
+  fileName     String   @map("file_name")
+  fileSize     Int      @map("file_size")
+  mimeType     String   @map("mime_type")
+  s3Key        String   @map("s3_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  message    PaletteMessage?    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  permission PalettePermission? @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@index([permissionId], map: "idx_palette_attachment_permission")
+  @@index([messageId], map: "idx_palette_attachment_message")
+  @@map("palette_attachments")
 }
 
 model PalettePayment {
