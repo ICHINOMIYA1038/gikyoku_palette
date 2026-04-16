@@ -72,8 +72,11 @@ export function EditPermissionForm({
     return fromLast !== undefined ? fromLast : fallback;
   };
 
+  // 失敗のたびに form を再mount
+  const formKey = state?.values ? JSON.stringify(state.values).length : 0;
+
   return (
-    <form action={formAction}>
+    <form action={formAction} key={formKey}>
       <Card>
         <CardHeader>
           <CardTitle>申請情報（修正）</CardTitle>

@@ -56,8 +56,11 @@ export function PermissionForm({
   const v = state?.values;
   const sv = (key: string): string | undefined => firstString(v?.[key]);
 
+  // 失敗のたびに form を再mountして新しい defaultValue を適用
+  const formKey = state?.values ? JSON.stringify(state.values).length : 0;
+
   return (
-    <form action={action}>
+    <form action={action} key={formKey}>
       <Card className="mb-4">
         <CardHeader>
           <CardTitle>上演料</CardTitle>

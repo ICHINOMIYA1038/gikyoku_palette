@@ -53,8 +53,13 @@ export function PlayEditForm({
     return (fallback ?? "") as string | number;
   };
 
+  // validation 失敗のたびに form を再mountし、新しい defaultValue を反映させる。
+  // React 19 は action 後にフォームを defaultValue 基準にリセットするため、
+  // 既にマウント済みの input には新しい defaultValue が適用されない問題を回避。
+  const formKey = state?.values ? JSON.stringify(state.values).length : 0;
+
   return (
-    <form action={action}>
+    <form action={action} key={formKey}>
       <Card>
         <CardHeader>
           <CardTitle>作品情報</CardTitle>
