@@ -88,6 +88,7 @@ export function PlayEditForm({
               initialBody={firstString(v?.body) ?? play.body ?? ""}
               initialPdfUrl={firstString(v?.bodyPdfUrl) ?? play.bodyPdfUrl}
               initialOrientation={(firstString(v?.bodyOrientation) as "portrait" | "landscape") || (play.bodyOrientation as "portrait" | "landscape") || "portrait"}
+              initialReadingDirection={(firstString(v?.readingDirection) as "ltr" | "rtl") || (play.readingDirection as "ltr" | "rtl") || "ltr"}
             />
           </div>
 

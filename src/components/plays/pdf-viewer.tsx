@@ -14,9 +14,17 @@ type Props = {
   src: string;
   title: string;
   orientation?: "portrait" | "landscape";
+  /** 'rtl' = 縦書き戯曲（右→左で進む）。キー操作・クリックゾーン・矢印アイコンを反転 */
+  readingDirection?: "ltr" | "rtl";
 };
 
-export function PdfViewer({ src, title, orientation = "portrait" }: Props) {
+export function PdfViewer({
+  src,
+  title,
+  orientation = "portrait",
+  readingDirection = "ltr",
+}: Props) {
+  const isRtl = readingDirection === "rtl";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<any>(null);
@@ -117,30 +125,35 @@ export function PdfViewer({ src, title, orientation = "portrait" }: Props) {
   const zoomOut = () => setScale((s) => Math.max(0.5, s - 0.25));
   const resetZoom = () => setScale(1);
 
-  // キーボード操作
+  // キーボード操作。縦書き(rtl)は左右矢印の意味を反転する
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") { prevPage(); showControlsTemporarily(); }
-      else if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") { e.preventDefault(); nextPage(); showControlsTemporarily(); }
+      const leftGoes = isRtl ? nextPage : prevPage;
+      const rightGoes = isRtl ? prevPage : nextPage;
+      if (e.key === "ArrowLeft") { leftGoes(); showControlsTemporarily(); }
+      else if (e.key === "ArrowUp") { prevPage(); showControlsTemporarily(); }
+      else if (e.key === "ArrowRight") { rightGoes(); showControlsTemporarily(); }
+      else if (e.key === "ArrowDown" || e.key === " ") { e.preventDefault(); nextPage(); showControlsTemporarily(); }
       else if (e.key === "Escape" && fullscreen) setFullscreen(false);
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [fullscreen, prevPage, nextPage, showControlsTemporarily]);
+  }, [fullscreen, prevPage, nextPage, showControlsTemporarily, isRtl]);
 
-  // 漫画ビューア風クリック（左半分=前、右半分=次、中央=コントロール表示）
+  // 漫画ビューア風クリック。縦書き(rtl)は左=次 / 右=前
   const handleViewerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const width = rect.width;
     const ratio = x / width;
+    const leftAction = isRtl ? nextPage : prevPage;
+    const rightAction = isRtl ? prevPage : nextPage;
 
     if (ratio < 0.3) {
-      prevPage();
+      leftAction();
     } else if (ratio > 0.7) {
-      nextPage();
+      rightAction();
     } else {
-      // 中央タップ → コントロール表示/非表示
       setShowControls((v) => !v);
       if (!showControls) showControlsTemporarily();
     }
@@ -195,17 +208,19 @@ export function PdfViewer({ src, title, orientation = "portrait" }: Props) {
           <canvas ref={canvasRef} className={dark ? "" : "shadow-lg"} />
         )}
 
-        {/* 左右ホバーヒント（フェードイン/アウト） */}
+        {/* 左右ホバーヒント（縦書きは左=次・右=前なのでアイコンと可視条件も反転） */}
         {!loading && totalPages > 1 && showControls && (
           <>
-            {!isFirst && (
+            {/* 左サイド: 横書き=前 / 縦書き=次 */}
+            {(isRtl ? !isLast : !isFirst) && (
               <div className="absolute left-0 top-0 bottom-0 w-[30%] flex items-center justify-start pl-4 pointer-events-none">
                 <div className={`rounded-full p-2 ${dark ? "bg-white/10" : "bg-black/5"}`}>
                   <ChevronLeft className={`h-6 w-6 ${dark ? "text-white/50" : "text-gray-400"}`} />
                 </div>
               </div>
             )}
-            {!isLast && (
+            {/* 右サイド: 横書き=次 / 縦書き=前 */}
+            {(isRtl ? !isFirst : !isLast) && (
               <div className="absolute right-0 top-0 bottom-0 w-[30%] flex items-center justify-end pr-4 pointer-events-none">
                 <div className={`rounded-full p-2 ${dark ? "bg-white/10" : "bg-black/5"}`}>
                   <ChevronRight className={`h-6 w-6 ${dark ? "text-white/50" : "text-gray-400"}`} />

@@ -3,12 +3,14 @@ import { useState } from "react";
 
 type BodyType = "text" | "pdf";
 type Orientation = "portrait" | "landscape";
+type ReadingDirection = "ltr" | "rtl";
 
 type Props = {
   initialType?: BodyType;
   initialBody?: string;
   initialPdfUrl?: string | null;
   initialOrientation?: Orientation;
+  initialReadingDirection?: ReadingDirection;
 };
 
 async function detectPdfOrientation(file: File): Promise<Orientation> {
@@ -32,9 +34,12 @@ export function BodyTypeSelector({
   initialBody = "",
   initialPdfUrl = null,
   initialOrientation = "portrait",
+  initialReadingDirection = "ltr",
 }: Props) {
   const [bodyType, setBodyType] = useState<BodyType>(initialType);
   const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
+  const [readingDirection, setReadingDirection] =
+    useState<ReadingDirection>(initialReadingDirection);
   const [pdfUrl, setPdfUrl] = useState<string>(initialPdfUrl || "");
   const [uploading, setUploading] = useState(false);
   const [pdfFileName, setPdfFileName] = useState<string>("");
@@ -107,6 +112,20 @@ export function BodyTypeSelector({
       <input type="hidden" name="bodyType" value={bodyType} />
       <input type="hidden" name="bodyPdfUrl" value={pdfUrl} />
       <input type="hidden" name="bodyOrientation" value={orientation} />
+      <input type="hidden" name="readingDirection" value={readingDirection} />
+
+      {/* 読む方向（縦書き戯曲は右→左に進む） */}
+      <label className="flex items-center gap-2 text-sm text-gray-600">
+        <input
+          type="checkbox"
+          checked={readingDirection === "rtl"}
+          onChange={(e) =>
+            setReadingDirection(e.target.checked ? "rtl" : "ltr")
+          }
+          className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-400"
+        />
+        縦書き（右から左へ進む）
+      </label>
 
       {/* テキスト入力 */}
       {bodyType === "text" && (

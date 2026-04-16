@@ -22,6 +22,8 @@ model PalettePlay {
   bodyPdfUrl      String?   @map("body_pdf_url")
   bodyType        String    @default("text") @map("body_type")
   bodyOrientation String    @default("portrait") @map("body_orientation")
+  /// 読む方向。'ltr' = 左から右（横書き）, 'rtl' = 右から左（縦書き戯曲）
+  readingDirection String   @default("ltr") @map("reading_direction")
   durationMinutes Int       @map("duration_minutes")
   castTotal       Int       @map("cast_total")
   castMale        Int       @default(0) @map("cast_male")

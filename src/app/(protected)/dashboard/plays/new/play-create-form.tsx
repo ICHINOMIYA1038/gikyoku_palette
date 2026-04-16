@@ -92,6 +92,9 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
               (firstString(v?.bodyOrientation) as "portrait" | "landscape") ||
               "portrait"
             }
+            initialReadingDirection={
+              (firstString(v?.readingDirection) as "ltr" | "rtl") || "ltr"
+            }
           />
         </div>
       </div>

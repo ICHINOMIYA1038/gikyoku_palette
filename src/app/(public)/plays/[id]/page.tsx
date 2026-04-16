@@ -232,9 +232,19 @@ export default async function PlayDetailPage({ params }: Props) {
         <div className="container mx-auto max-w-5xl px-4 pb-8">
           <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">台本</h2>
           {play.bodyType === "pdf" && play.bodyPdfUrl ? (
-            <PdfViewer src={play.bodyPdfUrl} title={play.title} orientation={play.bodyOrientation as "portrait" | "landscape"} />
+            <PdfViewer
+              src={play.bodyPdfUrl}
+              title={play.title}
+              orientation={play.bodyOrientation as "portrait" | "landscape"}
+              readingDirection={(play.readingDirection as "ltr" | "rtl") || "ltr"}
+            />
           ) : (
-            <PdfViewer src={`/api/plays/${play.id}/pdf`} title={play.title} orientation={play.bodyOrientation as "portrait" | "landscape"} />
+            <PdfViewer
+              src={`/api/plays/${play.id}/pdf`}
+              title={play.title}
+              orientation={play.bodyOrientation as "portrait" | "landscape"}
+              readingDirection={(play.readingDirection as "ltr" | "rtl") || "ltr"}
+            />
           )}
         </div>
       ) : null}
