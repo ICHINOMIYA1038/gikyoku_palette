@@ -1,41 +1,49 @@
-import { NextResponse } from "next/server";
+/**
+ * POST /api/upload-cover
+ *
+ * 作品カバー画像のアップロード。multipart/form-data で受け取り、
+ * attachment-storage 経由で保存（dev: local /tmp、本番: S3）。
+ * 旧 presigned-URL 方式から server-side 受信に統一。
+ */
+
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getPresignedUploadUrl } from "@/lib/s3";
+import { saveAttachment, getPublicUrl } from "@/lib/attachment-storage";
 
-const ALLOWED_TYPES: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
+const ACCEPT = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_BYTES = 5 * 1024 * 1024;
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { contentType } = body as { contentType?: string };
-
-  if (!contentType || !ALLOWED_TYPES[contentType]) {
+  const fd = await req.formData();
+  const file = fd.get("file");
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "fileが必要です" }, { status: 400 });
+  }
+  if (!ACCEPT.has(file.type)) {
     return NextResponse.json(
-      { error: "対応していないファイル形式です。JPEG、PNG、WebPのみ対応しています。" },
+      { error: "JPEG / PNG / WebP のみ対応しています" },
+      { status: 400 }
+    );
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      { error: "ファイルサイズは 5MB 以下にしてください" },
       { status: 400 }
     );
   }
 
-  const ext = ALLOWED_TYPES[contentType];
-  const timestamp = Date.now();
-  const key = `palette-covers/${session.user.id}-${timestamp}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { key } = await saveAttachment({
+    fileName: file.name,
+    contentType: file.type,
+    body: buffer,
+    folder: `palette/covers/${session.user.id}`,
+  });
 
-  try {
-    const { uploadUrl, imageUrl } = await getPresignedUploadUrl(key, contentType);
-    return NextResponse.json({ uploadUrl, imageUrl });
-  } catch (error) {
-    console.error("Failed to generate presigned URL:", error);
-    return NextResponse.json(
-      { error: "アップロードURLの生成に失敗しました" },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ imageUrl: getPublicUrl(key) });
 }

@@ -42,31 +42,17 @@ export function CoverImageUpload({
 
       setIsUploading(true);
       try {
-        // Get presigned URL
-        const res = await fetch("/api/upload-cover", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contentType: file.type }),
-        });
+        // multipart で直接サーバへ送信（/api/upload-cover が保存＋公開URLを返す）
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload-cover", { method: "POST", body: fd });
 
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "アップロードURLの取得に失敗しました");
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "アップロードに失敗しました");
         }
 
-        const { uploadUrl, imageUrl } = await res.json();
-
-        // Upload directly to S3
-        const uploadRes = await fetch(uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-
-        if (!uploadRes.ok) {
-          throw new Error("画像のアップロードに失敗しました");
-        }
-
+        const { imageUrl } = (await res.json()) as { imageUrl: string };
         setPreview(imageUrl);
         onUpload(imageUrl);
       } catch (err) {

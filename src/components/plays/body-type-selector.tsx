@@ -42,8 +42,18 @@ export function BodyTypeSelector({
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== "application/pdf") { alert("PDFファイルを選択してください"); return; }
-    if (file.size > 20 * 1024 * 1024) { alert("20MB以下のPDFを選択してください"); return; }
+    // MIME か 拡張子のどちらかで PDF と判定できればOK
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf) {
+      alert("PDFファイルを選択してください");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert("20MB以下のPDFを選択してください");
+      return;
+    }
 
     setUploading(true);
     setPdfFileName(file.name);
@@ -52,22 +62,17 @@ export function BodyTypeSelector({
       const detectedOrientation = await detectPdfOrientation(file);
       setOrientation(detectedOrientation);
 
-      const res = await fetch("/api/upload-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType: file.type }),
-      });
-      const { uploadUrl, pdfUrl: url } = await res.json();
-
-      await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload-pdf", { method: "POST", body: fd });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "アップロードに失敗しました");
+      }
+      const { pdfUrl: url } = await res.json();
       setPdfUrl(url);
-    } catch {
-      alert("アップロードに失敗しました");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "アップロードに失敗しました");
       setPdfFileName("");
     } finally {
       setUploading(false);
@@ -154,7 +159,7 @@ export function BodyTypeSelector({
               <p className="text-xs text-gray-400 mt-1">最大20MB · 向きは自動判定されます</p>
               <input
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,application/pdf"
                 onChange={handlePdfUpload}
                 disabled={uploading}
                 className="hidden"
