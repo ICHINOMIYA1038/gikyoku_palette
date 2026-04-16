@@ -18,6 +18,7 @@ import type { ThreadMessage, AttachmentSummary } from "@/types/thread";
 import type { SystemMessageKind } from "@/types";
 import type { LucideIcon } from "lucide-react";
 import { formatBytes } from "@/lib/attachment-policy";
+import { PdfThumbnail } from "./pdf-thumbnail";
 
 /**
  * タイムライン表示。
@@ -130,6 +131,7 @@ function AttachmentChip({
   mine: boolean;
 }) {
   const isImage = attachment.mimeType.startsWith("image/");
+  const isPdf = attachment.mimeType === "application/pdf";
   const url = `/api/attachments/${attachment.id}`;
 
   if (isImage) {
@@ -147,6 +149,16 @@ function AttachmentChip({
           <span>{formatBytes(attachment.fileSize)}</span>
         </div>
       </a>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <PdfThumbnail
+        url={url}
+        fileName={attachment.fileName}
+        fileSize={attachment.fileSize}
+      />
     );
   }
 

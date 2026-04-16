@@ -7,37 +7,61 @@ import { prisma } from "@/lib/db";
 export async function getDashboardSummary() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const userId = session.user.id;
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [publishedPlays, totalViews, pendingApplications, monthlyRevenue] =
-    await Promise.all([
-      prisma.palettePlay.count({
-        where: { authorId: session.user.id, isPublished: true },
-      }),
-      prisma.palettePlay.aggregate({
-        where: { authorId: session.user.id },
-        _sum: { viewCount: true },
-      }),
-      prisma.palettePermission.count({
-        where: { play: { authorId: session.user.id }, status: "pending" },
-      }),
-      prisma.palettePayment.aggregate({
-        where: {
-          permission: { play: { authorId: session.user.id } },
-          status: "completed",
-          completedAt: { gte: startOfMonth },
-        },
-        _sum: { authorAmount: true },
-      }),
-    ]);
+  const [
+    publishedPlays,
+    totalViews,
+    pendingApplications,
+    monthlyRevenue,
+    paidPublishedCount,
+    stripeAccount,
+  ] = await Promise.all([
+    prisma.palettePlay.count({
+      where: { authorId: userId, isPublished: true },
+    }),
+    prisma.palettePlay.aggregate({
+      where: { authorId: userId },
+      _sum: { viewCount: true },
+    }),
+    prisma.palettePermission.count({
+      where: { play: { authorId: userId }, status: "pending" },
+    }),
+    prisma.palettePayment.aggregate({
+      where: {
+        permission: { play: { authorId: userId } },
+        status: "completed",
+        completedAt: { gte: startOfMonth },
+      },
+      _sum: { authorAmount: true },
+    }),
+    // 有料 (isFree=false かつ feeAmount>0) で公開中の作品数
+    prisma.palettePlay.count({
+      where: {
+        authorId: userId,
+        isPublished: true,
+        isFree: false,
+        feeAmount: { gt: 0 },
+      },
+    }),
+    prisma.paletteStripeAccount.findUnique({
+      where: { userId },
+      select: { onboardingCompleted: true },
+    }),
+  ]);
 
   return {
     publishedPlays,
     totalViews: totalViews._sum.viewCount || 0,
     pendingApplications,
     monthlyRevenue: monthlyRevenue._sum.authorAmount || 0,
+    /** 有料公開中作品数。stripe 未設定で >0 なら警告対象。 */
+    paidPublishedCount,
+    /** 作家自身の Stripe Connect 連携完了状態 */
+    stripeReady: !!stripeAccount?.onboardingCompleted,
   };
 }
 
