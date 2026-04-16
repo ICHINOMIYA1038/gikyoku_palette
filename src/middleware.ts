@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-const protectedPaths = ["/dashboard", "/permissions", "/profile"];
+const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads"];
 
 export default auth((req) => {
   const isProtected = protectedPaths.some((path) =>

@@ -20,7 +20,7 @@ export default async function MyPermissionsPage() {
       ) : (
         <div className="space-y-3">
           {applications.map((app) => (
-            <Link key={app.id} href={`/permissions/${app.id}`}>
+            <Link key={app.id} href={app.thread ? `/threads/${app.thread.id}` : "#"}>
               <Card className="transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between p-4">
                   <div>

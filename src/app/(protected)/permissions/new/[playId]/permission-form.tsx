@@ -42,8 +42,8 @@ export function PermissionForm({
     formData: FormData
   ): Promise<FormState> {
     const result = await createPermission(playId, formData);
-    if (result.success && result.permissionId) {
-      router.push(`/permissions/${result.permissionId}`);
+    if (result.success && result.threadId) {
+      router.push(`/threads/${result.threadId}`);
     }
     return result;
   }
