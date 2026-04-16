@@ -13,11 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AvatarUpload } from "@/components/profile/avatar-upload";
 
 type UserProfile = {
   id: string;
   displayName: string;
   bio: string | null;
+  avatarUrl: string | null;
 };
 
 type FormState = {
@@ -41,7 +43,15 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
         <CardHeader>
           <CardTitle>基本情報</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label>プロフィール画像</Label>
+            <AvatarUpload
+              initialAvatarUrl={profile.avatarUrl}
+              fallbackLabel={profile.displayName}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="displayName">表示名（ペンネーム）</Label>
             <Input

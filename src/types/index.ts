@@ -17,7 +17,8 @@ export type NotificationType =
   | "permission_expired"
   | "revision_requested"
   | "permission_withdrawn"
-  | "new_message";
+  | "new_message"
+  | "new_play_published";
 
 export type TicketType = "paid" | "free";
 
@@ -40,6 +41,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   revision_requested: "修正依頼",
   permission_withdrawn: "取り下げ",
   new_message: "メッセージ",
+  new_play_published: "新作公開",
 };
 
 export const PLATFORM_FEE_RATE = 0.05;

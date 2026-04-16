@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getAuthorProfile } from "@/actions/auth";
+import { getFollowState } from "@/actions/follows";
 import { auth } from "@/lib/auth";
 import { PlayCard } from "@/components/plays/play-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ContactAuthorButton } from "@/components/authors/contact-author-button";
+import { FollowButton } from "@/components/authors/follow-button";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -24,10 +26,11 @@ export default async function AuthorProfilePage({ params }: Props) {
   const session = await auth();
   const isSelf = session?.user?.id === author.id;
   const canContact = !!session?.user?.id && !isSelf;
+  const followState = await getFollowState(author.id);
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
             <AvatarImage
@@ -45,7 +48,21 @@ export default async function AuthorProfilePage({ params }: Props) {
             )}
           </div>
         </div>
-        {canContact && <ContactAuthorButton authorId={author.id} />}
+        <div className="flex flex-wrap items-center gap-2">
+          {followState.canFollow && (
+            <FollowButton
+              authorId={author.id}
+              initialFollowing={followState.following}
+              initialCount={followState.followerCount}
+            />
+          )}
+          {!followState.canFollow && (
+            <span className="text-xs text-gray-500">
+              {followState.followerCount.toLocaleString()} フォロワー
+            </span>
+          )}
+          {canContact && <ContactAuthorButton authorId={author.id} />}
+        </div>
       </div>
 
       <h2 className="mb-4 text-xl font-semibold">

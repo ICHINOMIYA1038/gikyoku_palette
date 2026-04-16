@@ -10,6 +10,7 @@ import {
   Trash2,
   MessageSquare,
   Clock,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getNotifications, markAllAsRead } from "@/actions/notifications";
@@ -31,6 +32,7 @@ const TYPE_STYLES: Record<NotificationType, IconStyle> = {
   revision_requested: { icon: AlertCircle, color: "text-orange-600", bg: "bg-orange-50" },
   permission_withdrawn: { icon: Trash2, color: "text-slate-500", bg: "bg-slate-100" },
   new_message: { icon: MessageSquare, color: "text-pink-600", bg: "bg-pink-50" },
+  new_play_published: { icon: Sparkles, color: "text-purple-600", bg: "bg-purple-50" },
 };
 const FALLBACK_STYLE: IconStyle = { icon: Bell, color: "text-gray-400", bg: "bg-gray-100" };
 

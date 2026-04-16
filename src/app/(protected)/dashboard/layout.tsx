@@ -9,6 +9,8 @@ import {
   User,
   Link2,
   MessageCircle,
+  Heart,
+  UserPlus,
 } from "lucide-react";
 import { NavLink } from "@/components/dashboard/nav-link";
 
@@ -43,6 +45,12 @@ export default function DashboardLayout({
             </NavLink>
             <NavLink href="/threads" icon={MessageCircle}>
               メッセージ
+            </NavLink>
+            <NavLink href="/bookmarks" icon={Heart}>
+              お気に入り
+            </NavLink>
+            <NavLink href="/following" icon={UserPlus}>
+              フォロー
             </NavLink>
             <NavLink href="/profile/edit" icon={User}>
               プロフィール

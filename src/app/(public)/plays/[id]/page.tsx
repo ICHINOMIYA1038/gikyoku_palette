@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getPlayById, incrementViewCount } from "@/actions/plays";
+import { getBookmarkState } from "@/actions/bookmarks";
 import { prisma } from "@/lib/db";
 import { DownloadButton } from "@/components/plays/download-button";
+import { BookmarkButton } from "@/components/plays/bookmark-button";
 import { ReviewSection } from "@/components/reviews/review-section";
 import { truncateText } from "@/lib/utils";
 import Link from "next/link";
@@ -66,6 +68,8 @@ export default async function PlayDetailPage({ params }: Props) {
     });
     authorStripeReady = !!stripeAccount?.onboardingCompleted;
   }
+
+  const bookmarkState = await getBookmarkState(id);
 
   return (
     <div>
@@ -142,6 +146,13 @@ export default async function PlayDetailPage({ params }: Props) {
             <div className="lg:sticky lg:top-20 space-y-6">
               {/* Action Buttons */}
               <div className="space-y-3">
+                <div className="flex items-center justify-end">
+                  <BookmarkButton
+                    playId={play.id}
+                    initialBookmarked={bookmarkState.bookmarked}
+                    initialCount={bookmarkState.count}
+                  />
+                </div>
                 <DownloadButton playId={play.id} title={play.title} hasBody={!!play.body || !!play.bodyPdfUrl} bodyType={play.bodyType || "text"} bodyPdfUrl={play.bodyPdfUrl} />
                 <Link
                   href={`/permissions/new/${play.id}`}

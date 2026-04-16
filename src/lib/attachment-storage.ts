@@ -39,15 +39,17 @@ function getS3() {
 
 /**
  * 任意の Buffer/Uint8Array を保存し、ストレージキーを返す。
- * key は palette/attachments/{uuid}{.ext} 形式で生成する。
+ * key は <folder>/{uuid}{.ext} 形式で生成する（folder 既定: palette/attachments）。
  */
 export async function saveAttachment(opts: {
   fileName: string;
   contentType: string;
   body: Buffer | Uint8Array;
+  folder?: string;
 }): Promise<{ key: string }> {
   const ext = path.extname(opts.fileName);
-  const key = `palette/attachments/${randomUUID()}${ext}`;
+  const folder = opts.folder ?? "palette/attachments";
+  const key = `${folder}/${randomUUID()}${ext}`;
 
   if (isS3Configured()) {
     await getS3().send(
@@ -63,6 +65,19 @@ export async function saveAttachment(opts: {
     await fs.writeFile(path.join(LOCAL_DIR, key), opts.body);
   }
   return { key };
+}
+
+/**
+ * 公開ファイル用 URL（avatar・cover など、有効期限なしで参照したいもの）。
+ * S3: public bucket 想定の生 URL を返す（ACL設定の責務はインフラ側）。
+ * local: 配信ルート /api/storage/{key} を返す。
+ */
+export function getPublicUrl(key: string): string {
+  if (isS3Configured()) {
+    const region = process.env.AWS_REGION || "ap-northeast-1";
+    return `https://${process.env.AWS_S3_BUCKET}.s3.${region}.amazonaws.com/${key}`;
+  }
+  return `/api/storage/${key}`;
 }
 
 /**

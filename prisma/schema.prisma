@@ -42,6 +42,7 @@ model PalettePlay {
   genres      PalettePlayGenre[]
   permissions PalettePermission[]
   reviews     PaletteReview[]
+  bookmarks   PaletteBookmark[]
 
   @@index([authorId], map: "idx_palette_play_author")
   @@index([isPublished, publishedAt(sort: Desc)], map: "idx_palette_play_published")
@@ -151,6 +152,36 @@ model PaletteMessage {
   @@index([threadId, createdAt], map: "idx_palette_message_thread")
   @@index([senderId, readAt], map: "idx_palette_message_unread")
   @@map("palette_messages")
+}
+
+/// 作家フォロー。followerId が followeeId をフォローしている記録。
+/// (followerId, followeeId) で一意。CHECK で自分自身フォロー禁止（DB側）。
+model PaletteFollow {
+  id         String   @id @default(cuid())
+  followerId String   @map("follower_id")
+  followeeId String   @map("followee_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followeeId])
+  @@index([followerId, createdAt(sort: Desc)], map: "idx_palette_follows_follower")
+  @@index([followeeId, createdAt(sort: Desc)], map: "idx_palette_follows_followee")
+  @@map("palette_follows")
+}
+
+/// 作品をユーザーがブックマーク（お気に入り）した記録。
+/// (userId, playId) で一意。
+model PaletteBookmark {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  playId    String   @map("play_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  play PalettePlay @relation(fields: [playId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, playId])
+  @@index([userId, createdAt(sort: Desc)], map: "idx_palette_bookmarks_user")
+  @@index([playId], map: "idx_palette_bookmarks_play")
+  @@map("palette_bookmarks")
 }
 
 /// 添付ファイル。messageId / permissionId の排他リレーション（アプリ層で担保）。

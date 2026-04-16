@@ -229,6 +229,8 @@ export async function togglePublish(playId: string) {
   }
 
   const isPublished = !play.isPublished;
+  const wasFirstPublish = isPublished && !play.publishedAt;
+
   await prisma.palettePlay.update({
     where: { id: playId },
     data: {
@@ -236,6 +238,23 @@ export async function togglePublish(playId: string) {
       publishedAt: isPublished ? new Date() : null,
     },
   });
+
+  // 初公開のとき、フォロワーへ通知
+  if (wasFirstPublish) {
+    const { getFollowerIdsOf } = await import("@/actions/follows");
+    const { createNotification } = await import("@/actions/notifications");
+    const followerIds = await getFollowerIdsOf(session.user.id);
+    await Promise.all(
+      followerIds.map((followerId) =>
+        createNotification({
+          userId: followerId,
+          type: "new_play_published",
+          title: "フォロー中の作家が新作を公開しました",
+          message: `「${play.title}」が公開されました。`,
+        })
+      )
+    );
+  }
 
   revalidatePath("/");
   revalidatePath("/dashboard/plays");
