@@ -9,9 +9,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const SORT_OPTIONS = [
+  { value: "newest", label: "新着順" },
+  { value: "views", label: "閲覧数順" },
+  { value: "rating", label: "評価順" },
+  { value: "downloads", label: "DL数順" },
+] as const;
+
 export function SortSelector() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const currentSort = searchParams.get("sort") || "newest";
+  const currentLabel =
+    SORT_OPTIONS.find((o) => o.value === currentSort)?.label ?? "新着順";
 
   const handleSort = (value: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -24,16 +35,16 @@ export function SortSelector() {
   };
 
   return (
-    <Select
-      value={searchParams.get("sort") || "newest"}
-      onValueChange={handleSort}
-    >
+    <Select value={currentSort} onValueChange={handleSort}>
       <SelectTrigger className="w-[140px]">
-        <SelectValue />
+        <span className="truncate">{currentLabel}</span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="newest">新着順</SelectItem>
-        <SelectItem value="views">閲覧数順</SelectItem>
+        {SORT_OPTIONS.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );

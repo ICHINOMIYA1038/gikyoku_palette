@@ -11,7 +11,7 @@ type GetPlaysParams = {
   genreSlug?: string;
   maxDuration?: number;
   maxCast?: number;
-  sortBy?: "newest" | "views";
+  sortBy?: "newest" | "views" | "rating" | "downloads";
   page?: number;
   perPage?: number;
 };
@@ -50,10 +50,21 @@ export async function getPlays({
     where.castTotal = { lte: maxCast };
   }
 
-  const orderBy =
-    sortBy === "views"
-      ? { viewCount: "desc" as const }
-      : { publishedAt: "desc" as const };
+  let orderBy;
+  switch (sortBy) {
+    case "views":
+      orderBy = { viewCount: "desc" as const };
+      break;
+    case "rating":
+      orderBy = { avgRating: "desc" as const };
+      break;
+    case "downloads":
+      orderBy = { downloadCount: "desc" as const };
+      break;
+    default:
+      orderBy = { publishedAt: "desc" as const };
+      break;
+  }
 
   const [plays, total] = await Promise.all([
     prisma.palettePlay.findMany({
@@ -79,6 +90,7 @@ export async function getPlays({
 
   const playsWithAuthor = plays.map((p) => ({
     ...p,
+    bodyPreview: p.body ? p.body.slice(0, 300) : null,
     author: authorMap.get(p.authorId) || { id: p.authorId, displayName: "不明", avatarUrl: null },
   }));
 
@@ -118,16 +130,34 @@ export async function getGenres() {
   return prisma.paletteGenre.findMany({ orderBy: { id: "asc" } });
 }
 
-const playUpdateSchema = z.object({
-  title: z.string().min(1).max(200),
-  synopsis: z.string().min(1),
-  durationMinutes: z.coerce.number().int().positive(),
-  castTotal: z.coerce.number().int().positive(),
+export async function getStats() {
+  const [playCount, authorCount, reviewCount] = await Promise.all([
+    prisma.palettePlay.count({ where: { isPublished: true } }),
+    prisma.$queryRaw<any[]>`SELECT COUNT(DISTINCT author_id)::int as count FROM palette_plays WHERE is_published = true`,
+    prisma.paletteReview.count(),
+  ]);
+  return {
+    playCount,
+    authorCount: authorCount[0]?.count || 0,
+    reviewCount,
+  };
+}
+
+const playSchema = z.object({
+  title: z.string().min(1, "タイトルを入力してください").max(200),
+  synopsis: z.string().min(1, "あらすじを入力してください"),
+  body: z.string().max(500000, "本文は50万文字以内にしてください").optional().default(""),
+  bodyType: z.enum(["text", "pdf"]).default("text"),
+  bodyPdfUrl: z.string().url().optional().or(z.literal("")),
+  bodyOrientation: z.enum(["portrait", "landscape"]).default("portrait"),
+  durationMinutes: z.coerce.number().int().positive("上演時間を入力してください"),
+  castTotal: z.coerce.number().int().positive("出演人数を入力してください"),
   castMale: z.coerce.number().int().min(0),
   castFemale: z.coerce.number().int().min(0),
   castOther: z.coerce.number().int().min(0),
   feeAmount: z.coerce.number().int().min(0),
   isFree: z.coerce.boolean(),
+  coverImageUrl: z.string().url().optional().or(z.literal("")),
 });
 
 export async function updatePlay(playId: string, formData: FormData) {
@@ -139,9 +169,15 @@ export async function updatePlay(playId: string, formData: FormData) {
     return { error: "権限がありません" };
   }
 
-  const parsed = playUpdateSchema.safeParse({
+  const coverImageRaw = formData.get("coverImageUrl") as string | null;
+  const bodyPdfUrlRaw = formData.get("bodyPdfUrl") as string | null;
+  const parsed = playSchema.safeParse({
     title: formData.get("title"),
     synopsis: formData.get("synopsis"),
+    body: formData.get("body"),
+    bodyType: formData.get("bodyType") || "text",
+    bodyPdfUrl: bodyPdfUrlRaw || undefined,
+    bodyOrientation: formData.get("bodyOrientation") || "portrait",
     durationMinutes: formData.get("durationMinutes"),
     castTotal: formData.get("castTotal"),
     castMale: formData.get("castMale"),
@@ -149,15 +185,33 @@ export async function updatePlay(playId: string, formData: FormData) {
     castOther: formData.get("castOther"),
     feeAmount: formData.get("feeAmount"),
     isFree: formData.get("isFree") === "true",
+    coverImageUrl: coverImageRaw || undefined,
   });
 
   if (!parsed.success) {
     return { error: "入力内容に誤りがあります" };
   }
 
-  await prisma.palettePlay.update({
-    where: { id: playId },
-    data: parsed.data,
+  const genreIds = formData.getAll("genreIds").map(Number) as number[];
+
+  const { coverImageUrl: coverUrl, bodyPdfUrl, ...restData } = parsed.data;
+  await prisma.$transaction(async (tx) => {
+    await tx.palettePlay.update({
+      where: { id: playId },
+      data: {
+        ...restData,
+        coverImageUrl: coverUrl || null,
+        bodyPdfUrl: bodyPdfUrl || null,
+      },
+    });
+
+    await tx.palettePlayGenre.deleteMany({ where: { playId } });
+
+    if (genreIds.length > 0) {
+      await tx.palettePlayGenre.createMany({
+        data: genreIds.map((genreId) => ({ playId, genreId })),
+      });
+    }
   });
 
   revalidatePath(`/plays/${playId}`);
@@ -192,9 +246,15 @@ export async function createPlay(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const parsed = playUpdateSchema.safeParse({
+  const coverImageRaw = formData.get("coverImageUrl") as string | null;
+  const bodyPdfUrlRaw = formData.get("bodyPdfUrl") as string | null;
+  const parsed = playSchema.safeParse({
     title: formData.get("title"),
     synopsis: formData.get("synopsis"),
+    body: formData.get("body"),
+    bodyType: formData.get("bodyType") || "text",
+    bodyPdfUrl: bodyPdfUrlRaw || undefined,
+    bodyOrientation: formData.get("bodyOrientation") || "portrait",
     durationMinutes: formData.get("durationMinutes"),
     castTotal: formData.get("castTotal"),
     castMale: formData.get("castMale"),
@@ -202,19 +262,30 @@ export async function createPlay(formData: FormData) {
     castOther: formData.get("castOther"),
     feeAmount: formData.get("feeAmount"),
     isFree: formData.get("isFree") === "true",
+    coverImageUrl: coverImageRaw || undefined,
   });
 
   if (!parsed.success) {
     return { error: "入力内容に誤りがあります" };
   }
 
+  const { coverImageUrl: coverUrl, bodyPdfUrl, ...restData } = parsed.data;
+  const genreIds = formData.getAll("genreIds").map(Number) as number[];
+
   const play = await prisma.palettePlay.create({
     data: {
-      ...parsed.data,
+      ...restData,
+      coverImageUrl: coverUrl || null,
+      bodyPdfUrl: bodyPdfUrl || null,
       authorId: session.user.id,
-      body: (formData.get("body") as string) || null,
     },
   });
+
+  if (genreIds.length > 0) {
+    await prisma.palettePlayGenre.createMany({
+      data: genreIds.map((genreId) => ({ playId: play.id, genreId })),
+    });
+  }
 
   revalidatePath("/dashboard/plays");
   return { success: true, id: play.id };

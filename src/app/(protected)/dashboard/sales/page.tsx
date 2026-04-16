@@ -59,7 +59,7 @@ export default async function SalesPage() {
               <TableRow key={payment.id}>
                 <TableCell>{payment.completedAt ? formatDate(payment.completedAt) : "-"}</TableCell>
                 <TableCell>{payment.permission.play.title}</TableCell>
-                <TableCell>{payment.permission.applicant.displayName}</TableCell>
+                <TableCell>{payment.permission.applicantDisplayName}</TableCell>
                 <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(payment.platformFee)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(payment.authorAmount)}</TableCell>

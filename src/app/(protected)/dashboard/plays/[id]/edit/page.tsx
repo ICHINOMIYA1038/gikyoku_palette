@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PlayEditForm } from "./play-edit-form";
 
@@ -9,20 +9,17 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function PlayEditPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  const play = await prisma.play.findUnique({
+  const play = await prisma.palettePlay.findUnique({
     where: { id },
     include: { genres: { include: { genre: true } } },
   });
 
-  if (!play || play.authorId !== user.id) notFound();
+  if (!play || play.authorId !== session.user.id) notFound();
 
-  const genres = await prisma.genre.findMany({ orderBy: { id: "asc" } });
+  const genres = await prisma.paletteGenre.findMany({ orderBy: { id: "asc" } });
 
   return (
     <div>

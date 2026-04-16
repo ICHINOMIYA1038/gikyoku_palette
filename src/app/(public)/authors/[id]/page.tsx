@@ -45,7 +45,7 @@ export default async function AuthorProfilePage({ params }: Props) {
 
       {author.plays.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {author.plays.map((play) => (
+          {author.plays.map((play: any) => (
             <PlayCard
               key={play.id}
               id={play.id}
@@ -55,10 +55,11 @@ export default async function AuthorProfilePage({ params }: Props) {
               synopsis={play.synopsis}
               durationMinutes={play.durationMinutes}
               castTotal={play.castTotal}
-              genres={play.genres.map((pg) => ({ name: pg.genre.name }))}
+              genres={play.genres.map((pg: any) => ({ name: pg.genre.name }))}
               isFree={play.isFree}
               feeAmount={play.feeAmount}
               viewCount={play.viewCount}
+              coverImageUrl={play.coverImageUrl}
             />
           ))}
         </div>

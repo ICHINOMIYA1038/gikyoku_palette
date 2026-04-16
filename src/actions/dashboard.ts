@@ -60,8 +60,26 @@ export async function getSalesSummary() {
     orderBy: { completedAt: "desc" },
   });
 
+  // Fetch applicant display names via raw query
+  const applicantIds = [...new Set(payments.map((p) => p.permission.applicantId))];
+  let applicantMap = new Map<string, string>();
+  if (applicantIds.length > 0) {
+    const applicants = await prisma.$queryRaw<any[]>`
+      SELECT id, "displayName" FROM "User" WHERE id = ANY(${applicantIds})
+    `;
+    applicantMap = new Map(applicants.map((a: any) => [a.id, a.displayName || "不明"]));
+  }
+
+  const paymentsWithApplicant = payments.map((p) => ({
+    ...p,
+    permission: {
+      ...p.permission,
+      applicantDisplayName: applicantMap.get(p.permission.applicantId) || "不明",
+    },
+  }));
+
   const totalRevenue = payments.reduce((sum, p) => sum + p.authorAmount, 0);
   const totalFees = payments.reduce((sum, p) => sum + p.platformFee, 0);
 
-  return { payments, totalRevenue, totalFees };
+  return { payments: paymentsWithApplicant, totalRevenue, totalFees };
 }

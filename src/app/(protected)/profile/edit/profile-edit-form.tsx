@@ -13,7 +13,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { User } from "@prisma/client";
+
+type UserProfile = {
+  id: string;
+  displayName: string;
+  bio: string | null;
+};
 
 type FormState = {
   error?: Record<string, string[]>;
@@ -27,7 +32,7 @@ async function formAction(
   return await updateProfile(formData);
 }
 
-export function ProfileEditForm({ profile }: { profile: User }) {
+export function ProfileEditForm({ profile }: { profile: UserProfile }) {
   const [state, action, isPending] = useActionState(formAction, null);
 
   return (

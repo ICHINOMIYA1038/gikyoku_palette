@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ProfileEditForm } from "./profile-edit-form";
 
@@ -12,17 +12,15 @@ export default async function ProfileEditPage({
 }: {
   searchParams: Promise<{ first?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
-  if (!user) redirect("/login");
+  const users = await prisma.$queryRaw<any[]>`
+    SELECT id, name, email, "displayName", bio, "avatarUrl", "groupName", image
+    FROM "User" WHERE id = ${session.user.id}
+  `;
 
-  const profile = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
-
+  const profile = users[0];
   if (!profile) redirect("/login");
 
   const params = await searchParams;

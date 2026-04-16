@@ -16,7 +16,7 @@ const genres = [
 async function main() {
   console.log("Seeding genres...");
   for (const genre of genres) {
-    await prisma.genre.upsert({
+    await prisma.paletteGenre.upsert({
       where: { slug: genre.slug },
       update: {},
       create: genre,

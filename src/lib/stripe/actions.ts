@@ -6,10 +6,6 @@ import { prisma } from "@/lib/db";
 import { getStripe } from "@/lib/stripe/client";
 
 export async function createExpressAccount() {
-  
-  
-    
-  
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -39,10 +35,6 @@ export async function createExpressAccount() {
 }
 
 export async function createAccountLink() {
-  
-  
-    
-  
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -67,10 +59,6 @@ export async function createAccountLink() {
 }
 
 export async function getStripeAccountStatus() {
-  
-  
-    
-  
   const session = await auth();
   if (!session?.user?.id) return null;
 
@@ -102,21 +90,17 @@ export async function getStripeAccountStatus() {
 }
 
 export async function createCheckoutSession(permissionId: string) {
-  
-  
-    
-  
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const authSession = await auth();
+  if (!authSession?.user?.id) redirect("/login");
 
   const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
     include: {
-      play: { include: { author: { include: { stripeAccount: true } } } },
+      play: true,
     },
   });
 
-  if (!permission || permission.applicantId !== session.user.id) {
+  if (!permission || permission.applicantId !== authSession.user.id) {
     return { error: "権限がありません" };
   }
 
@@ -124,13 +108,18 @@ export async function createCheckoutSession(permissionId: string) {
     return { error: "この申請は決済できる状態ではありません" };
   }
 
-  if (!permission.play.author.stripeAccount?.onboardingCompleted) {
+  // Get author's Stripe account via raw query
+  const stripeAccounts = await prisma.paletteStripeAccount.findUnique({
+    where: { userId: permission.play.authorId },
+  });
+
+  if (!stripeAccounts?.onboardingCompleted) {
     return { error: "執筆者のStripeアカウントが準備できていません" };
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
-  const session = await getStripe().checkout.sessions.create({
+  const checkoutSession = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
       {
@@ -148,7 +137,7 @@ export async function createCheckoutSession(permissionId: string) {
     payment_intent_data: {
       application_fee_amount: permission.platformFee,
       transfer_data: {
-        destination: permission.play.author.stripeAccount.stripeAccountId,
+        destination: stripeAccounts.stripeAccountId,
       },
     },
     success_url: `${appUrl}/permissions/${permissionId}?payment=success`,
@@ -162,12 +151,12 @@ export async function createCheckoutSession(permissionId: string) {
   await prisma.palettePayment.create({
     data: {
       permissionId,
-      stripeCheckoutSessionId: session.id,
+      stripeCheckoutSessionId: checkoutSession.id,
       amount: permission.feeAmount,
       platformFee: permission.platformFee,
       authorAmount: permission.feeAmount - permission.platformFee,
     },
   });
 
-  return { url: session.url };
+  return { url: checkoutSession.url };
 }

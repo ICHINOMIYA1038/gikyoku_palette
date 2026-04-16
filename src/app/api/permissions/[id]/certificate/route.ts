@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
+
+async function getUserDisplayName(id: string): Promise<string> {
+  const users = await prisma.$queryRaw<any[]>`
+    SELECT "displayName" FROM "User" WHERE id = ${id}
+  `;
+  return users[0]?.displayName || "不明";
+}
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await auth();
 
-  if (!user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const permission = await prisma.performancePermission.findUnique({
+  const permission = await prisma.palettePermission.findUnique({
     where: { id },
     include: {
-      play: {
-        include: { author: { select: { displayName: true } } },
-      },
-      applicant: { select: { displayName: true } },
+      play: true,
     },
   });
 
@@ -31,12 +32,13 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (permission.applicantId !== user.id && permission.play.authorId !== user.id) {
+  if (permission.applicantId !== session.user.id && permission.play.authorId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const authorDisplayName = await getUserDisplayName(permission.play.authorId);
+
   // Generate simple text-based certificate (MVP)
-  // TODO: Replace with @react-pdf/renderer for proper PDF generation
   const certificate = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         上 演 許 可 証
@@ -45,7 +47,7 @@ export async function GET(
 許可番号: ${permission.permissionNumber}
 
 作品名: ${permission.play.title}
-執筆者: ${permission.play.author.displayName}
+執筆者: ${authorDisplayName}
 
 申請者: ${permission.organizationName}
 代表者: ${permission.representativeName}

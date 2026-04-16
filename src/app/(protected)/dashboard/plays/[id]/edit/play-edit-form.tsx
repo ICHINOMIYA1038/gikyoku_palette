@@ -1,27 +1,32 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { updatePlay } from "@/actions/plays";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Play, Genre } from "@prisma/client";
+import { GenreSelector } from "@/components/plays/genre-selector";
+import { CoverImageUpload } from "@/components/plays/cover-image-upload";
+import { BodyTypeSelector } from "@/components/plays/body-type-selector";
+import type { PalettePlay, PaletteGenre } from "@prisma/client";
 
 type FormState = { error?: string; success?: boolean } | null;
 
-type PlayWithGenres = Play & {
-  genres: { genre: Genre }[];
+type PlayWithGenres = PalettePlay & {
+  genres: { genre: PaletteGenre }[];
 };
 
 export function PlayEditForm({
   play,
-  genres: _genres,
+  genres,
 }: {
   play: PlayWithGenres;
-  genres: Genre[];
+  genres: PaletteGenre[];
 }) {
+  const [coverImageUrl, setCoverImageUrl] = useState(play.coverImageUrl || "");
+
   async function formAction(
     _prevState: FormState,
     formData: FormData
@@ -38,6 +43,12 @@ export function PlayEditForm({
           <CardTitle>作品情報</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <CoverImageUpload
+            currentImageUrl={play.coverImageUrl}
+            onUpload={setCoverImageUrl}
+          />
+          <input type="hidden" name="coverImageUrl" value={coverImageUrl} />
+
           <div className="space-y-2">
             <Label htmlFor="title">タイトル</Label>
             <Input id="title" name="title" defaultValue={play.title} required />
@@ -46,6 +57,16 @@ export function PlayEditForm({
           <div className="space-y-2">
             <Label htmlFor="synopsis">あらすじ</Label>
             <Textarea id="synopsis" name="synopsis" defaultValue={play.synopsis} rows={4} required />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">本文</label>
+            <BodyTypeSelector
+              initialType={(play.bodyType as "text" | "pdf") || "text"}
+              initialBody={play.body || ""}
+              initialPdfUrl={play.bodyPdfUrl}
+              initialOrientation={(play.bodyOrientation as "portrait" | "landscape") || "portrait"}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -82,6 +103,14 @@ export function PlayEditForm({
             <div className="flex items-end">
               <input type="hidden" name="isFree" value={play.feeAmount === 0 ? "true" : "false"} />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>ジャンル（最大5つ）</Label>
+            <GenreSelector
+              genres={genres}
+              selectedIds={play.genres.map(g => g.genre.id)}
+            />
           </div>
         </CardContent>
         <CardFooter className="gap-2">

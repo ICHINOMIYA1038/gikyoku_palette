@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
   const now = new Date();
 
-  const expiredPermissions = await prisma.performancePermission.findMany({
+  const expiredPermissions = await prisma.palettePermission.findMany({
     where: {
       status: "approved",
       expiresAt: { lt: now },
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   });
 
   for (const permission of expiredPermissions) {
-    await prisma.performancePermission.update({
+    await prisma.palettePermission.update({
       where: { id: permission.id },
       data: { status: "expired" },
     });

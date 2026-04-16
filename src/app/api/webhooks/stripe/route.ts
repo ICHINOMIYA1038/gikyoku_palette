@@ -29,18 +29,18 @@ export async function POST(request: NextRequest) {
   }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const permissionId = session.metadata?.permissionId;
+    const checkoutSession = event.data.object as Stripe.Checkout.Session;
+    const permissionId = checkoutSession.metadata?.permissionId;
 
     if (permissionId) {
       // Update payment
-      await prisma.payment.updateMany({
-        where: { stripeCheckoutSessionId: session.id },
+      await prisma.palettePayment.updateMany({
+        where: { stripeCheckoutSessionId: checkoutSession.id },
         data: {
           stripePaymentIntentId:
-            typeof session.payment_intent === "string"
-              ? session.payment_intent
-              : session.payment_intent?.id || null,
+            typeof checkoutSession.payment_intent === "string"
+              ? checkoutSession.payment_intent
+              : checkoutSession.payment_intent?.id || null,
           status: "completed",
           completedAt: new Date(),
         },
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
       // Update permission to permitted
       const permissionNumber = generatePermissionNumber();
-      const permission = await prisma.performancePermission.update({
+      const permission = await prisma.palettePermission.update({
         where: { id: permissionId },
         data: {
           status: "permitted",
