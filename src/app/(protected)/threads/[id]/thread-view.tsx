@@ -8,6 +8,7 @@ import { MessageTimeline } from "./message-timeline";
 import { Composer } from "./composer";
 import { InfoPanel } from "./info-panel";
 import { AuthorActions } from "./author-actions";
+import { ApplicantActions } from "./applicant-actions";
 import type { ThreadDetail } from "@/types/thread";
 import { PERMISSION_STATUS_LABELS } from "@/types";
 import type { PermissionStatus } from "@/types";
@@ -82,9 +83,12 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
         {/* タイムライン */}
         <div className="flex min-h-0 flex-1 flex-col">
           <MessageTimeline messages={detail.messages} />
-          {/* 作家アクション（承認/却下） — pending時のみ表示 */}
+          {/* アクション帯：作家には承認系、申請者には取り下げ・再提出 */}
           {role === "author" && (
             <AuthorActions permission={detail.permission} onActed={refresh} />
+          )}
+          {role === "applicant" && (
+            <ApplicantActions permission={detail.permission} onActed={refresh} />
           )}
           {/* 入力欄 */}
           <Composer

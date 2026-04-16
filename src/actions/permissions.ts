@@ -390,6 +390,235 @@ export async function rejectPermission(permissionId: string, reason: string, mes
 }
 
 // ============================================
+// アクション: 修正依頼（作家）
+// ============================================
+
+export async function requestRevision(
+  permissionId: string,
+  reason: string,
+  message?: string
+) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const userId: string = session.user.id;
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return { error: "修正依頼の理由を入力してください" };
+
+  const permission = await prisma.palettePermission.findUnique({
+    where: { id: permissionId },
+    include: { play: true, thread: { select: { id: true } } },
+  });
+  if (!permission || permission.play.authorId !== userId) {
+    return { error: "権限がありません" };
+  }
+  if (permission.status !== "pending") {
+    return { error: "この申請は修正依頼できる状態ではありません" };
+  }
+  if (!permission.thread) return { error: "スレッドが見つかりません" };
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.palettePermission.update({
+      where: { id: permissionId },
+      data: {
+        status: "revision_requested",
+        revisionReason: trimmedReason,
+        reviewedAt: now,
+      },
+    });
+
+    await appendSystemMessage(tx, {
+      threadId: permission.thread!.id,
+      kind: "revision_requested",
+      content: "修正を依頼しました",
+      metadata: { reason: trimmedReason },
+      createdAt: now,
+    });
+
+    if (message?.trim()) {
+      await appendUserMessage(tx, {
+        threadId: permission.thread!.id,
+        senderId: userId,
+        content: message,
+        createdAt: new Date(now.getTime() + 1),
+      });
+    }
+  });
+
+  await createNotification({
+    userId: permission.applicantId,
+    type: "revision_requested",
+    permissionId,
+    title: "申請の修正依頼が届きました",
+    message: `「${permission.play.title}」の申請内容について修正依頼が届きました。理由: ${trimmedReason}`,
+  });
+
+  revalidatePath("/dashboard/permissions");
+  revalidatePath("/threads");
+  revalidatePath(`/threads/${permission.thread.id}`);
+  return { success: true };
+}
+
+// ============================================
+// アクション: 再提出（申請者）
+// ============================================
+
+export async function resubmitPermission(
+  permissionId: string,
+  formData: FormData
+) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const userId: string = session.user.id;
+
+  const permission = await prisma.palettePermission.findUnique({
+    where: { id: permissionId },
+    include: { play: true, thread: { select: { id: true } } },
+  });
+  if (!permission || permission.applicantId !== userId) {
+    return { error: "権限がありません" };
+  }
+  if (permission.status !== "revision_requested") {
+    return { error: "この申請は再提出できる状態ではありません" };
+  }
+  if (!permission.thread) return { error: "スレッドが見つかりません" };
+
+  const parsed = permissionFormSchema.safeParse({
+    organizationName: formData.get("organizationName"),
+    representativeName: formData.get("representativeName"),
+    performanceTitle: formData.get("performanceTitle"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    venueName: formData.get("venueName"),
+    venueLocation: formData.get("venueLocation"),
+    expectedAudience: formData.get("expectedAudience"),
+    ticketType: formData.get("ticketType"),
+    numPerformances: formData.get("numPerformances"),
+    applicantMessage: formData.get("applicantMessage") || "",
+  });
+
+  if (!parsed.success) {
+    return {
+      error: "入力内容に誤りがあります",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const applicantMessage = parsed.data.applicantMessage?.trim() || "";
+  const now = new Date();
+  const threadId = permission.thread.id;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.palettePermission.update({
+      where: { id: permissionId },
+      data: {
+        organizationName: parsed.data.organizationName,
+        representativeName: parsed.data.representativeName,
+        performanceTitle: parsed.data.performanceTitle,
+        startDate: new Date(parsed.data.startDate),
+        endDate: new Date(parsed.data.endDate),
+        venueName: parsed.data.venueName,
+        venueLocation: parsed.data.venueLocation,
+        expectedAudience: parsed.data.expectedAudience,
+        ticketType: parsed.data.ticketType,
+        numPerformances: parsed.data.numPerformances,
+        status: "pending",
+        // revisionReason は履歴として残す（次の修正依頼で上書きされる）
+      },
+    });
+
+    await appendSystemMessage(tx, {
+      threadId,
+      kind: "permission_resubmitted",
+      content: "修正版を提出しました",
+      createdAt: now,
+    });
+
+    if (applicantMessage) {
+      await appendUserMessage(tx, {
+        threadId,
+        senderId: userId,
+        content: applicantMessage,
+        createdAt: new Date(now.getTime() + 1),
+      });
+    }
+  });
+
+  await createNotification({
+    userId: permission.play.authorId,
+    type: "new_application",
+    permissionId,
+    title: "申請の修正版が提出されました",
+    message: `「${permission.play.title}」の申請が修正されて再提出されました。`,
+  });
+
+  revalidatePath("/dashboard/permissions");
+  revalidatePath("/threads");
+  revalidatePath(`/threads/${threadId}`);
+  return { success: true, threadId };
+}
+
+// ============================================
+// アクション: 取り下げ（申請者）
+// ============================================
+
+export async function withdrawPermission(permissionId: string, reason?: string) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const userId: string = session.user.id;
+
+  const permission = await prisma.palettePermission.findUnique({
+    where: { id: permissionId },
+    include: { play: true, thread: { select: { id: true } } },
+  });
+  if (!permission || permission.applicantId !== userId) {
+    return { error: "権限がありません" };
+  }
+  if (
+    !["pending", "approved", "revision_requested"].includes(permission.status)
+  ) {
+    return { error: "この申請は取り下げできる状態ではありません" };
+  }
+  if (!permission.thread) return { error: "スレッドが見つかりません" };
+
+  const now = new Date();
+  const trimmedReason = reason?.trim() || null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.palettePermission.update({
+      where: { id: permissionId },
+      data: {
+        status: "withdrawn",
+        withdrawnAt: now,
+        withdrawnReason: trimmedReason,
+      },
+    });
+
+    await appendSystemMessage(tx, {
+      threadId: permission.thread!.id,
+      kind: "permission_withdrawn",
+      content: "申請を取り下げました",
+      metadata: trimmedReason ? { reason: trimmedReason } : undefined,
+      createdAt: now,
+    });
+  });
+
+  await createNotification({
+    userId: permission.play.authorId,
+    type: "permission_withdrawn",
+    permissionId,
+    title: "申請が取り下げられました",
+    message: `「${permission.play.title}」の上演許可申請が申請者により取り下げられました。`,
+  });
+
+  revalidatePath("/dashboard/permissions");
+  revalidatePath("/threads");
+  revalidatePath(`/threads/${permission.thread.id}`);
+  return { success: true };
+}
+
+// ============================================
 // 汎用参照（既存ページで使用）
 // ============================================
 
