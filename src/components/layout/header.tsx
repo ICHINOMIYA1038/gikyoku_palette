@@ -29,8 +29,7 @@ export async function Header() {
             href="/"
             className="flex items-center gap-2 font-serif text-lg font-bold text-gray-900"
           >
-            <Image src="/logo-palette.png" alt="" width={28} height={28} className="rounded" />
-            戯曲パレット
+            <Image src="/logo-palette.png" alt="戯曲パレット" width={180} height={36} className="h-9 w-auto" priority />
           </Link>
           <nav className="hidden items-center gap-6 text-sm md:flex">
             <Link
