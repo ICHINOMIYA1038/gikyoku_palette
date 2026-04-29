@@ -23,13 +23,13 @@ export async function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-sm">
-      <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+      <div className="container mx-auto flex h-24 max-w-5xl items-center justify-between px-4">
         <div className="flex items-center gap-8">
           <Link
             href="/"
             className="flex items-center gap-2 font-serif text-lg font-bold text-gray-900"
           >
-            <Image src="/logo-palette.png" alt="戯曲パレット" width={320} height={48} className="h-14 w-auto" priority />
+            <Image src="/logo-palette.png" alt="戯曲パレット" width={400} height={80} className="h-20 w-auto" priority />
           </Link>
           <nav className="hidden items-center gap-6 text-sm md:flex">
             <Link
