@@ -35,10 +35,10 @@ export function Footer() {
                 <Link href="/contact" className="text-gray-400 hover:text-gray-300 transition-colors">お問い合わせ</Link>
               </li>
               <li>
-                <Link href="#" className="text-gray-400 hover:text-gray-300 transition-colors">利用規約</Link>
+                <Link href="/terms" className="text-gray-400 hover:text-gray-300 transition-colors">利用規約</Link>
               </li>
               <li>
-                <Link href="#" className="text-gray-400 hover:text-gray-300 transition-colors">プライバシーポリシー</Link>
+                <Link href="/privacy" className="text-gray-400 hover:text-gray-300 transition-colors">プライバシーポリシー</Link>
               </li>
             </ul>
           </div>
