@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   const users = await prisma.$queryRaw<
     Array<{ id: string; name: string | null; email: string; displayName: string | null }>
   >`
-    SELECT id, name, email, "displayName" FROM "User" WHERE email = ${email}
+    SELECT id, name, email, "displayName" FROM "public"."User" WHERE email = ${email}
   `;
 
   if (users.length === 0) {

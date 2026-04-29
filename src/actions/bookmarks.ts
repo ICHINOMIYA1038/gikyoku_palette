@@ -53,7 +53,7 @@ export async function getMyBookmarks() {
   const authors =
     authorIds.length > 0
       ? await prisma.$queryRaw<Array<{ id: string; displayName: string | null; name: string | null }>>`
-        SELECT id, "displayName", name FROM "User" WHERE id = ANY(${authorIds})
+        SELECT id, "displayName", name FROM "public"."User" WHERE id = ANY(${authorIds})
       `
       : [];
   const authorMap = new Map(

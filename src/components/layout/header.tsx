@@ -13,7 +13,7 @@ export async function Header() {
       Array<{ displayName: string | null; name: string | null; avatarUrl: string | null; image: string | null }>
     >`
       SELECT "displayName", name, "avatarUrl", image
-      FROM "User" WHERE id = ${session.user.id}
+      FROM "public"."User" WHERE id = ${session.user.id}
     `;
     const u = rows[0];
     displayName = u?.displayName || u?.name || session.user.name || "マイページ";

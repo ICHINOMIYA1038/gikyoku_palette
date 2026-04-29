@@ -12,6 +12,10 @@ import Image from "next/image";
 import { Clock, Users, Banknote, Eye, Download, Star, AlertTriangle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PdfViewer } from "@/components/plays/pdf-viewer";
+import { PlayBody } from "@/components/plays/play-body";
+import { SeriesNav } from "@/components/plays/series-nav";
+import { getSeriesNavigation } from "@/actions/series";
+import { getTagsForPlay } from "@/actions/tags";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -70,6 +74,9 @@ export default async function PlayDetailPage({ params }: Props) {
   }
 
   const bookmarkState = await getBookmarkState(id);
+
+  const seriesNav = await getSeriesNavigation(id);
+  const tags = await getTagsForPlay(id);
 
   return (
     <div>
@@ -144,6 +151,17 @@ export default async function PlayDetailPage({ params }: Props) {
           {/* Right Column - Sidebar */}
           <div className="lg:w-1/3">
             <div className="lg:sticky lg:top-20 space-y-6">
+              {/* Series Navigation */}
+              {seriesNav && (
+                <SeriesNav
+                  series={seriesNav.series}
+                  prev={seriesNav.prev}
+                  next={seriesNav.next}
+                  total={seriesNav.total}
+                  current={seriesNav.current}
+                />
+              )}
+
               {/* Action Buttons */}
               <div className="space-y-3">
                 <div className="flex items-center justify-end">
@@ -202,6 +220,24 @@ export default async function PlayDetailPage({ params }: Props) {
                     </div>
                   </div>
                 )}
+
+                {/* Tags */}
+                {tags.length > 0 && (
+                  <div className="pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-400 mb-2">タグ</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {tags.map((t) => (
+                        <Link
+                          key={t.id}
+                          href={`/tags/${t.slug}`}
+                          className="inline-flex items-center rounded-full bg-pink-50 border border-pink-100 px-2.5 py-0.5 text-xs font-medium text-pink-700 hover:bg-pink-100 transition-colors"
+                        >
+                          #{t.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Author Card */}
@@ -238,6 +274,9 @@ export default async function PlayDetailPage({ params }: Props) {
               orientation={play.bodyOrientation as "portrait" | "landscape"}
               readingDirection={(play.readingDirection as "ltr" | "rtl") || "ltr"}
             />
+          ) : play.readingDirection === "rtl" && play.body ? (
+            // 縦書きテキストは native HTML で vertical-rl 表示
+            <PlayBody body={play.body} direction="rtl" />
           ) : (
             <PdfViewer
               src={`/api/plays/${play.id}/pdf`}

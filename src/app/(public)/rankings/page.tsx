@@ -51,14 +51,20 @@ export default async function RankingsPage({
   return (
     <div>
       {/* Header */}
-      <div className="border-b border-gray-100">
+      <div className="border-b border-gray-100 bg-gradient-to-b from-pink-50/40 to-white">
         <div className="container mx-auto max-w-4xl px-4 py-10">
-          <h1 className="text-2xl md:text-3xl font-bold font-serif text-gray-900 mb-6">
-            ランキング
+          <p className="text-xs font-medium uppercase tracking-wider text-pink-600 mb-1">
+            Rankings
+          </p>
+          <h1 className="text-2xl md:text-3xl font-bold font-serif text-gray-900">
+            人気作品ランキング
           </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            閲覧数・評価・ダウンロード数で戯曲パレットの人気作品を見る
+          </p>
 
           {/* Pill Tabs */}
-          <div className="flex gap-1 rounded-lg bg-gray-100 p-1 w-fit">
+          <div className="mt-6 flex gap-1 rounded-lg bg-white border border-gray-200 p-1 w-fit shadow-sm">
             {TABS.map((tab) => (
               <Link
                 key={tab.value}
@@ -66,8 +72,8 @@ export default async function RankingsPage({
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-all",
                   type === tab.value
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-pink-500 text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 )}
               >
                 {tab.icon}
@@ -90,17 +96,24 @@ export default async function RankingsPage({
                     href={`/plays/${play.id}`}
                     className="block"
                   >
-                    <div className="rounded-lg border border-gray-200 bg-white transition-all hover:shadow-md p-5 flex gap-4 items-start">
+                    <div
+                      className={cn(
+                        "rounded-lg border bg-white transition-all hover:shadow-md p-5 flex gap-4 items-start",
+                        play.rank === 1 && "border-amber-300 ring-1 ring-amber-100",
+                        play.rank === 2 && "border-gray-300",
+                        play.rank === 3 && "border-orange-300"
+                      )}
+                    >
                       {/* Rank Badge */}
                       <span
                         className={cn(
-                          "flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold shrink-0",
+                          "flex items-center justify-center w-9 h-9 rounded-full text-base font-bold shrink-0 shadow-sm",
                           play.rank === 1 &&
-                            "bg-amber-100 text-amber-700",
+                            "bg-amber-400 text-white",
                           play.rank === 2 &&
-                            "bg-gray-100 text-gray-600",
+                            "bg-gray-400 text-white",
                           play.rank === 3 &&
-                            "bg-orange-100 text-orange-700"
+                            "bg-orange-400 text-white"
                         )}
                       >
                         {play.rank}
@@ -152,25 +165,55 @@ export default async function RankingsPage({
 
             {/* 4th and below */}
             {rest.length > 0 && (
-              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+              <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100 overflow-hidden">
                 {rest.map((play) => (
                   <Link
                     key={play.id}
                     href={`/plays/${play.id}`}
-                    className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 sm:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors"
                   >
-                    <span className="w-8 text-center text-sm font-medium text-gray-400 shrink-0">
+                    {/* Rank */}
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-xs font-semibold text-gray-600 shrink-0">
                       {play.rank}
                     </span>
+
+                    {/* Cover Thumbnail */}
+                    <div className="hidden sm:block h-12 w-12 shrink-0 overflow-hidden rounded bg-gray-100">
+                      {play.coverImageUrl ? (
+                        <img
+                          src={play.coverImageUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center font-serif text-base text-gray-300">
+                          {play.title.slice(0, 1)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Title + Meta */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate text-sm text-gray-900">
                         {play.title}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="truncate text-xs text-gray-500">
                         {play.author.displayName}
                       </p>
+                      <div className="mt-0.5 flex items-center gap-3 text-[11px] text-gray-400">
+                        <span className="inline-flex items-center gap-0.5">
+                          <Clock className="h-3 w-3" />
+                          {play.durationMinutes}分
+                        </span>
+                        <span className="inline-flex items-center gap-0.5">
+                          <Users className="h-3 w-3" />
+                          {play.castTotal}人
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-sm text-gray-500 whitespace-nowrap font-medium shrink-0">
+
+                    {/* Stat */}
+                    <span className="text-sm text-gray-700 whitespace-nowrap font-medium shrink-0">
                       {getStatLabel(play, type)}
                     </span>
                   </Link>

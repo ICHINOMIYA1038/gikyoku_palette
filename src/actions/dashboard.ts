@@ -220,7 +220,7 @@ export async function getDashboardAnalytics() {
   const users =
     userIdsToResolve.length > 0
       ? await prisma.$queryRaw<Array<{ id: string; displayName: string | null; name: string | null }>>`
-        SELECT id, "displayName", name FROM "User" WHERE id = ANY(${userIdsToResolve})
+        SELECT id, "displayName", name FROM "public"."User" WHERE id = ANY(${userIdsToResolve})
       `
       : [];
   const nameMap = new Map(
@@ -294,7 +294,7 @@ export async function getSalesSummary() {
   let applicantMap = new Map<string, string>();
   if (applicantIds.length > 0) {
     const applicants = await prisma.$queryRaw<any[]>`
-      SELECT id, "displayName" FROM "User" WHERE id = ANY(${applicantIds})
+      SELECT id, "displayName" FROM "public"."User" WHERE id = ANY(${applicantIds})
     `;
     applicantMap = new Map(applicants.map((a: any) => [a.id, a.displayName || "不明"]));
   }

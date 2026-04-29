@@ -36,7 +36,7 @@ async function main() {
 
   for (const u of users) {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "User" (id, name, email, "displayName", bio, "updatedAt")
+      `INSERT INTO "public"."User" (id, name, email, "displayName", bio, "updatedAt")
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO NOTHING`,
       u.id,
@@ -596,9 +596,9 @@ BGMにジャズが流れている。
 
   // 5. avg_rating, review_count を更新
   await prisma.$executeRaw`
-    UPDATE palette_plays SET
-      avg_rating = COALESCE((SELECT AVG(rating)::float FROM palette_reviews WHERE play_id = palette_plays.id), 0),
-      review_count = (SELECT COUNT(*) FROM palette_reviews WHERE play_id = palette_plays.id)
+    UPDATE palette.palette_plays SET
+      avg_rating = COALESCE((SELECT AVG(rating)::float FROM palette.palette_reviews WHERE play_id = palette.palette_plays.id), 0),
+      review_count = (SELECT COUNT(*) FROM palette.palette_reviews WHERE play_id = palette.palette_plays.id)
   `;
   console.log("avg_rating / review_count 更新完了");
 

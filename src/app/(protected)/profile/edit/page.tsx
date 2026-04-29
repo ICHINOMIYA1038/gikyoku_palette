@@ -17,7 +17,7 @@ export default async function ProfileEditPage({
 
   const users = await prisma.$queryRaw<any[]>`
     SELECT id, name, email, "displayName", bio, "avatarUrl", "groupName", image
-    FROM "User" WHERE id = ${session.user.id}
+    FROM "public"."User" WHERE id = ${session.user.id}
   `;
 
   const profile = users[0];

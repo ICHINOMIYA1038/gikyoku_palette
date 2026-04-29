@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { ArrowLeft, MessageSquare, Pen, Send } from "lucide-react";
 import { MessageTimeline } from "./message-timeline";
 import { Composer } from "./composer";
 import { InfoPanel } from "./info-panel";
@@ -85,6 +85,31 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
               </>
             )}
           </div>
+
+          {/* あなたの役割バッジ(permission のみ) */}
+          {isPermission && detail.role && (
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                detail.role === "author"
+                  ? "border-pink-300 bg-pink-50 text-pink-700"
+                  : "border-sky-300 bg-sky-50 text-sky-700"
+              }`}
+              title="あなたの役割"
+            >
+              {detail.role === "author" ? (
+                <>
+                  <Pen className="h-3 w-3" />
+                  あなた: 執筆者
+                </>
+              ) : (
+                <>
+                  <Send className="h-3 w-3" />
+                  あなた: 申請者
+                </>
+              )}
+            </span>
+          )}
+
           {status && <PermissionStatusBadge status={status} />}
         </div>
       </header>
@@ -94,10 +119,15 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
         <div className="flex min-h-0 flex-1 flex-col">
           {/* permission スレッドのみ: モバイル折りたたみで企画情報 */}
           {isPermission && (
-            <details className="mb-4 rounded-lg border border-gray-200 bg-white lg:hidden">
+            <details
+              className="mb-4 rounded-lg border border-gray-200 bg-white lg:hidden"
+              open
+            >
               <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-gray-700 marker:hidden">
                 <span className="flex items-center justify-between">
-                  企画情報を見る
+                  {detail.role === "author"
+                    ? "申請者・申請内容を見る"
+                    : "申請内容を見る"}
                   <span aria-hidden className="text-gray-400">▾</span>
                 </span>
               </summary>
@@ -107,7 +137,17 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
             </details>
           )}
 
-          <MessageTimeline messages={detail.messages} />
+          <MessageTimeline
+            messages={detail.messages}
+            other={{
+              name: detail.other.name,
+              roleLabel: isPermission
+                ? detail.role === "author"
+                  ? "申請者"
+                  : "執筆者"
+                : null,
+            }}
+          />
 
           {/* アクション帯：permission スレッドのみ */}
           {isPermission && detail.role === "author" && detail.permission && (

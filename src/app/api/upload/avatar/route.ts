@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const avatarUrl = getPublicUrl(key);
 
   await prisma.$executeRaw`
-    UPDATE "User" SET "avatarUrl" = ${avatarUrl} WHERE id = ${userId}
+    UPDATE "public"."User" SET "avatarUrl" = ${avatarUrl} WHERE id = ${userId}
   `;
 
   return NextResponse.json({ avatarUrl });

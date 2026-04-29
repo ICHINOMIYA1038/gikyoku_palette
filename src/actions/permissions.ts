@@ -16,7 +16,7 @@ async function getUserById(id: string) {
   const users = await prisma.$queryRaw<
     Array<{ id: string; name: string | null; displayName: string | null; avatarUrl: string | null; email: string | null }>
   >`
-    SELECT id, name, "displayName", "avatarUrl", email FROM "User" WHERE id = ${id}
+    SELECT id, name, "displayName", "avatarUrl", email FROM "public"."User" WHERE id = ${id}
   `;
   return users[0] || null;
 }
@@ -26,7 +26,7 @@ async function getUsersByIds(ids: string[]) {
   const users = await prisma.$queryRaw<
     Array<{ id: string; name: string | null; displayName: string | null; avatarUrl: string | null }>
   >`
-    SELECT id, name, "displayName", "avatarUrl" FROM "User" WHERE id = ANY(${ids})
+    SELECT id, name, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${ids})
   `;
   return new Map(users.map((u) => [u.id, u]));
 }

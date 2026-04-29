@@ -3,6 +3,7 @@
 import {
   LayoutDashboard,
   BookOpen,
+  Library,
   ShieldCheck,
   Banknote,
   Bell,
@@ -30,6 +31,9 @@ export default function DashboardLayout({
             </NavLink>
             <NavLink href="/dashboard/plays" icon={BookOpen}>
               作品管理
+            </NavLink>
+            <NavLink href="/dashboard/series" icon={Library}>
+              シリーズ
             </NavLink>
             <NavLink href="/dashboard/permissions" icon={ShieldCheck}>
               許可申請

@@ -21,7 +21,15 @@ type FormState = {
   values?: FormValues;
 } | null;
 
-export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
+type SeriesOption = { id: string; title: string };
+
+export function PlayCreateForm({
+  genres,
+  seriesList,
+}: {
+  genres: PaletteGenre[];
+  seriesList: SeriesOption[];
+}) {
   const router = useRouter();
   const [coverImageUrl, setCoverImageUrl] = useState("");
 
@@ -186,6 +194,38 @@ export function PlayCreateForm({ genres }: { genres: PaletteGenre[] }) {
           <Label>ジャンル（最大5つ）</Label>
           <GenreSelector genres={genres} />
         </div>
+
+        {seriesList.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+            <div className="space-y-2">
+              <Label htmlFor="seriesId">シリーズ（任意）</Label>
+              <select
+                id="seriesId"
+                name="seriesId"
+                defaultValue={sv("seriesId", "")}
+                className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-200 outline-none bg-white"
+              >
+                <option value="">シリーズに所属させない</option>
+                {seriesList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="seriesOrder">順番（任意）</Label>
+              <Input
+                id="seriesOrder"
+                name="seriesOrder"
+                type="number"
+                min="1"
+                defaultValue={sv("seriesOrder", "")}
+                placeholder="例: 1"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 送信 */}

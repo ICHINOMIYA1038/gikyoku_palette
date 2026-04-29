@@ -74,7 +74,7 @@ export async function getFollowing() {
     }>
   >`
     SELECT id, "displayName", name, bio, "avatarUrl", image
-    FROM "User" WHERE id = ANY(${ids})
+    FROM "public"."User" WHERE id = ANY(${ids})
   `;
   const map = new Map(users.map((u) => [u.id, u]));
 

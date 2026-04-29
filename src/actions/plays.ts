@@ -84,7 +84,7 @@ export async function getPlays({
   const authorIds = [...new Set(plays.map((p) => p.authorId))];
   const authors = authorIds.length > 0
     ? await prisma.$queryRaw<any[]>`
-        SELECT id, name, "displayName", "avatarUrl" FROM "User" WHERE id = ANY(${authorIds})
+        SELECT id, name, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${authorIds})
       `
     : [];
   const authorMap = new Map(authors.map((a: any) => [a.id, a]));
@@ -114,7 +114,7 @@ export async function getPlayById(id: string) {
   if (!play) return null;
 
   const authors = await prisma.$queryRaw<any[]>`
-    SELECT id, name, "displayName", bio, "avatarUrl" FROM "User" WHERE id = ${play.authorId}
+    SELECT id, name, "displayName", bio, "avatarUrl" FROM "public"."User" WHERE id = ${play.authorId}
   `;
 
   return { ...play, author: authors[0] || null };
@@ -186,6 +186,8 @@ function readPlayInput(formData: FormData) {
     feeAmount: opt("feeAmount") || "0",
     isFree: formData.get("isFree") === "true",
     coverImageUrl: opt("coverImageUrl"),
+    seriesId: opt("seriesId"),
+    seriesOrder: opt("seriesOrder"),
   };
 }
 
@@ -205,6 +207,8 @@ const playSchema = z.object({
   feeAmount: z.coerce.number().int().min(0),
   isFree: z.coerce.boolean(),
   coverImageUrl: uploadedUrl.optional().or(z.literal("")),
+  seriesId: z.string().optional(),
+  seriesOrder: z.coerce.number().int().positive().optional(),
 });
 
 export async function updatePlay(playId: string, formData: FormData) {
@@ -230,7 +234,14 @@ export async function updatePlay(playId: string, formData: FormData) {
 
   const genreIds = formData.getAll("genreIds").map(Number) as number[];
 
-  const { coverImageUrl: coverUrl, bodyPdfUrl, ...restData } = parsed.data;
+  const { coverImageUrl: coverUrl, bodyPdfUrl, seriesId, seriesOrder, ...restData } = parsed.data;
+
+  // 指定された seriesId が自分のものか検証。他人のシリーズには紐付けない。
+  let safeSeriesId: string | null = null;
+  if (seriesId) {
+    const s = await prisma.paletteSeries.findUnique({ where: { id: seriesId }, select: { authorId: true } });
+    if (s && s.authorId === session.user.id) safeSeriesId = seriesId;
+  }
   await prisma.$transaction(async (tx) => {
     await tx.palettePlay.update({
       where: { id: playId },
@@ -238,6 +249,8 @@ export async function updatePlay(playId: string, formData: FormData) {
         ...restData,
         coverImageUrl: coverUrl || null,
         bodyPdfUrl: bodyPdfUrl || null,
+        seriesId: safeSeriesId,
+        seriesOrder: safeSeriesId ? seriesOrder ?? null : null,
       },
     });
 
@@ -312,14 +325,23 @@ export async function createPlay(formData: FormData) {
     return { error: summary, fieldErrors, values: extractFormValues(formData) };
   }
 
-  const { coverImageUrl: coverUrl, bodyPdfUrl, ...restData } = parsed.data;
+  const { coverImageUrl: coverUrl, bodyPdfUrl, seriesId, seriesOrder, ...restData } = parsed.data;
   const genreIds = formData.getAll("genreIds").map(Number) as number[];
+
+  // 指定された seriesId が自分のものか検証
+  let safeSeriesId: string | null = null;
+  if (seriesId) {
+    const s = await prisma.paletteSeries.findUnique({ where: { id: seriesId }, select: { authorId: true } });
+    if (s && s.authorId === session.user.id) safeSeriesId = seriesId;
+  }
 
   const play = await prisma.palettePlay.create({
     data: {
       ...restData,
       coverImageUrl: coverUrl || null,
       bodyPdfUrl: bodyPdfUrl || null,
+      seriesId: safeSeriesId,
+      seriesOrder: safeSeriesId ? seriesOrder ?? null : null,
       authorId: session.user.id,
     },
   });

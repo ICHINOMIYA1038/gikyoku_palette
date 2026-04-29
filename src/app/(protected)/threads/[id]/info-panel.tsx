@@ -1,4 +1,15 @@
-import { Calendar, MapPin, Users, FileText, Download, Award } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import {
+  Calendar,
+  MapPin,
+  Users,
+  FileText,
+  Download,
+  Award,
+  Clock,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ThreadDetail } from "@/types/thread";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -20,8 +31,68 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
     isApplicant && permission.status === "approved";
   const showPermissionNumber = !!permission.permissionNumber;
 
+  // 作家視点のときは申請者情報を、申請者視点のときは作家情報を最上部に出す
+  const counterparty = isApplicant ? permission.author : permission.applicant;
+  const counterpartyLabel = isApplicant ? "執筆者" : "申請者";
+  const appliedDate = formatDate(permission.createdAt);
+
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      {/* 0. 相手カード: 誰の申請か/誰に申請したかを最上部に */}
+      <div
+        className={`border-b border-gray-100 p-4 ${
+          isApplicant ? "bg-pink-50/40" : "bg-sky-50/40"
+        }`}
+      >
+        <p
+          className={`mb-2 text-[10px] font-semibold uppercase tracking-wider ${
+            isApplicant ? "text-pink-700" : "text-sky-700"
+          }`}
+        >
+          {counterpartyLabel}
+        </p>
+        <div className="flex items-start gap-3">
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gray-100">
+            {counterparty.image ? (
+              <Image
+                src={counterparty.image}
+                alt={counterparty.name}
+                width={40}
+                height={40}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm font-medium text-gray-400">
+                {counterparty.name.slice(0, 1)}
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-gray-900">
+              {counterparty.name}
+            </p>
+            {!isApplicant && (
+              <p className="mt-0.5 truncate text-xs text-gray-500">
+                {permission.organizationName} / 代表 {permission.representativeName}
+              </p>
+            )}
+            <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-gray-500">
+              <Clock className="h-3 w-3" />
+              申請日: {appliedDate}
+            </p>
+            {!isApplicant && (
+              <Link
+                href={`/authors/${counterparty.id}`}
+                className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] text-gray-500 hover:text-pink-600"
+              >
+                プロフィールを見る
+                <ExternalLink className="h-2.5 w-2.5" />
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* 1. アクション帯：許可証 or 決済 — 一番目立つ位置 */}
       {showPermissionNumber && (
         <div className="border-b border-gray-100 bg-emerald-50/50 p-4">

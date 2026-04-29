@@ -24,7 +24,7 @@ export async function getAuthors({
       authors = await prisma.$queryRaw<any[]>`
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
-        FROM "User" u
+        FROM "public"."User" u
         INNER JOIN palette_plays p ON p.author_id = u.id AND p.is_published = true
         GROUP BY u.id
         ORDER BY MIN(p.created_at) DESC
@@ -35,7 +35,7 @@ export async function getAuthors({
       authors = await prisma.$queryRaw<any[]>`
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
-        FROM "User" u
+        FROM "public"."User" u
         INNER JOIN palette_plays p ON p.author_id = u.id AND p.is_published = true
         GROUP BY u.id
         ORDER BY u."displayName" ASC
@@ -47,7 +47,7 @@ export async function getAuthors({
       authors = await prisma.$queryRaw<any[]>`
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
-        FROM "User" u
+        FROM "public"."User" u
         INNER JOIN palette_plays p ON p.author_id = u.id AND p.is_published = true
         GROUP BY u.id
         ORDER BY play_count DESC, u."displayName" ASC

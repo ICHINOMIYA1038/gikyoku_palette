@@ -29,7 +29,7 @@ async function fetchUsersByIds(ids: string[]) {
   if (ids.length === 0) return new Map<string, UserRow>();
   const rows = await prisma.$queryRaw<UserRow[]>`
     SELECT id, name, "displayName", image, "avatarUrl", email
-    FROM "User" WHERE id = ANY(${ids})
+    FROM "public"."User" WHERE id = ANY(${ids})
   `;
   return new Map(rows.map((r) => [r.id, r]));
 }
@@ -202,6 +202,14 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
       where: { userId: thread.permission.play.authorId },
       select: { onboardingCompleted: true },
     });
+
+    // 申請者と作家の情報をまとめて取得
+    const applicantId = thread.permission.applicantId;
+    const authorId = thread.permission.play.authorId;
+    const permUserMap = await fetchUsersByIds([applicantId, authorId]);
+    const applicantUser = userToThreadUser(permUserMap.get(applicantId), applicantId);
+    const authorUser = userToThreadUser(permUserMap.get(authorId), authorId);
+
     const permission: PermissionInThread = {
       id: thread.permission.id,
       status: thread.permission.status as PermissionStatus,
@@ -223,6 +231,9 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
       withdrawnReason: thread.permission.withdrawnReason,
       paidAt: thread.permission.paidAt?.toISOString() ?? null,
       expiresAt: thread.permission.expiresAt?.toISOString() ?? null,
+      createdAt: thread.permission.createdAt.toISOString(),
+      applicant: applicantUser,
+      author: authorUser,
     };
     return {
       id: thread.id,
@@ -391,7 +402,7 @@ export async function openInquiryThread(otherUserId: string) {
 
   // 相手ユーザー存在確認（共有 User テーブル参照）
   const others = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM "User" WHERE id = ${otherUserId}
+    SELECT id FROM "public"."User" WHERE id = ${otherUserId}
   `;
   if (others.length === 0) return { error: "ユーザーが見つかりません" };
 

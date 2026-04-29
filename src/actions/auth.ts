@@ -31,7 +31,7 @@ export async function updateProfile(formData: FormData) {
   // User is in public schema, accessed via tosyokan's Prisma
   // For now, update via raw query since User isn't in palette schema
   await prisma.$executeRaw`
-    UPDATE "User" SET "displayName" = ${parsed.data.displayName}, "bio" = ${parsed.data.bio || null}
+    UPDATE "public"."User" SET "displayName" = ${parsed.data.displayName}, "bio" = ${parsed.data.bio || null}
     WHERE id = ${session.user.id}
   `;
 
@@ -43,7 +43,7 @@ export async function updateProfile(formData: FormData) {
 export async function getAuthorProfile(authorId: string) {
   const author = await prisma.$queryRaw<any[]>`
     SELECT id, name, "displayName", bio, "avatarUrl", "groupName", image
-    FROM "User" WHERE id = ${authorId}
+    FROM "public"."User" WHERE id = ${authorId}
   `;
   if (!author[0]) return null;
 
@@ -62,7 +62,7 @@ export async function getCurrentUser() {
 
   const users = await prisma.$queryRaw<any[]>`
     SELECT id, name, email, "displayName", bio, "avatarUrl", "groupName", image, role
-    FROM "User" WHERE id = ${session.user.id}
+    FROM "public"."User" WHERE id = ${session.user.id}
   `;
 
   return users[0] || null;

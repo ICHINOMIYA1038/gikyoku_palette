@@ -27,7 +27,19 @@ import { PdfThumbnail } from "./pdf-thumbnail";
  * - 日付区切りを自動挿入
  * - 読みやすさ優先：pre-wrap、リンク自動化は今回スコープ外
  */
-export function MessageTimeline({ messages }: { messages: ThreadMessage[] }) {
+type OtherMeta = {
+  name: string;
+  /** "執筆者"/"申請者" などの役割ラベル。inquiry の場合は null */
+  roleLabel: string | null;
+};
+
+export function MessageTimeline({
+  messages,
+  other,
+}: {
+  messages: ThreadMessage[];
+  other?: OtherMeta;
+}) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,7 +71,7 @@ export function MessageTimeline({ messages }: { messages: ThreadMessage[] }) {
             {m.type === "system" ? (
               <SystemCard message={m} />
             ) : (
-              <TextBubble message={m} />
+              <TextBubble message={m} other={other} />
             )}
           </div>
         );
@@ -84,12 +96,31 @@ function DateSeparator({ iso }: { iso: string }) {
   );
 }
 
-function TextBubble({ message }: { message: ThreadMessage }) {
+function TextBubble({
+  message,
+  other,
+}: {
+  message: ThreadMessage;
+  other?: OtherMeta;
+}) {
   const time = formatTime(message.createdAt);
   const hasText = message.content.trim().length > 0;
+
+  // 誰が話しているかのラベル(相手吹き出しのみ)
+  const senderLabel = !message.isMine && other
+    ? other.roleLabel
+      ? `${other.roleLabel} ・ ${other.name}`
+      : other.name
+    : null;
+
   return (
     <div className={`flex ${message.isMine ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[80%] space-y-1 ${message.isMine ? "order-2" : ""}`}>
+        {senderLabel && (
+          <p className="px-1 text-[10px] font-medium text-gray-500">
+            {senderLabel}
+          </p>
+        )}
         {hasText && (
           <div
             className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${

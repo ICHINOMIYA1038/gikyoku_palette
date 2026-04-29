@@ -27,12 +27,16 @@ type PlayWithGenres = PalettePlay & {
   genres: { genre: PaletteGenre }[];
 };
 
+type SeriesOption = { id: string; title: string };
+
 export function PlayEditForm({
   play,
   genres,
+  seriesList,
 }: {
   play: PlayWithGenres;
   genres: PaletteGenre[];
+  seriesList: SeriesOption[];
 }) {
   const [coverImageUrl, setCoverImageUrl] = useState(play.coverImageUrl || "");
 
@@ -135,6 +139,38 @@ export function PlayEditForm({
               selectedIds={play.genres.map(g => g.genre.id)}
             />
           </div>
+
+          {seriesList.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+              <div className="space-y-2">
+                <Label htmlFor="seriesId">シリーズ（任意）</Label>
+                <select
+                  id="seriesId"
+                  name="seriesId"
+                  defaultValue={sv("seriesId", play.seriesId) as string}
+                  className="w-full h-10 rounded-md border border-gray-300 px-3 text-sm focus:border-pink-400 focus:ring-1 focus:ring-pink-200 outline-none bg-white"
+                >
+                  <option value="">シリーズに所属させない</option>
+                  {seriesList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="seriesOrder">順番（任意）</Label>
+                <Input
+                  id="seriesOrder"
+                  name="seriesOrder"
+                  type="number"
+                  min="1"
+                  defaultValue={sv("seriesOrder", play.seriesOrder)}
+                  placeholder="例: 1"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="gap-2">
           <Button type="submit" disabled={isPending}>

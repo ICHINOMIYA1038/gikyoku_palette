@@ -1,4 +1,19 @@
 {
+  "regions": ["hnd1"],
+  "functions": {
+    "src/app/api/plays/[id]/pdf/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/permissions/[id]/certificate/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/upload-pdf/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/**/opengraph-image.tsx": {
+      "maxDuration": 15
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/expire-permissions",

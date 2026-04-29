@@ -6,11 +6,14 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  schemas   = ["public", "palette"]
 }
 
 // ============================================
-// 戯曲パレット専用テーブル（palette_ プレフィックス）
-// User は戯曲図書館の User テーブルを直接参照
+// 戯曲パレット専用テーブル
+// すべて schema = "palette" に配置
+// User テーブルだけは戯曲図書館と共有のため public に置き、
+// $queryRaw で参照する (search_path に public が含まれている前提)
 // ============================================
 
 model PalettePlay {
@@ -24,6 +27,8 @@ model PalettePlay {
   bodyOrientation String    @default("portrait") @map("body_orientation")
   /// 読む方向。'ltr' = 左から右（横書き）, 'rtl' = 右から左（縦書き戯曲）
   readingDirection String   @default("ltr") @map("reading_direction")
+  seriesId        String?   @map("series_id")
+  seriesOrder     Int?      @map("series_order")
   durationMinutes Int       @map("duration_minutes")
   castTotal       Int       @map("cast_total")
   castMale        Int       @default(0) @map("cast_male")
@@ -42,13 +47,65 @@ model PalettePlay {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
   genres      PalettePlayGenre[]
+  tags        PalettePlayTag[]
   permissions PalettePermission[]
   reviews     PaletteReview[]
   bookmarks   PaletteBookmark[]
+  series      PaletteSeries?    @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   @@index([authorId], map: "idx_palette_play_author")
   @@index([isPublished, publishedAt(sort: Desc)], map: "idx_palette_play_published")
+  @@index([seriesId, seriesOrder], map: "idx_palette_play_series")
   @@map("palette_plays")
+  @@schema("palette")
+}
+
+/// ユーザー(作家)が自由に作品に付与できるタグ。
+/// slug はアプリ側で正規化(小文字化・空白→ハイフン)して一意性を保つ。
+/// name は表示用。
+model PaletteTag {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique
+  name      String
+  playCount Int      @default(0) @map("play_count")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  plays PalettePlayTag[]
+
+  @@index([playCount(sort: Desc)], map: "idx_palette_tag_popular")
+  @@map("palette_tags")
+  @@schema("palette")
+}
+
+model PalettePlayTag {
+  playId String @map("play_id")
+  tagId  Int    @map("tag_id")
+
+  play PalettePlay @relation(fields: [playId], references: [id], onDelete: Cascade)
+  tag  PaletteTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([playId, tagId])
+  @@index([tagId], map: "idx_palette_play_tag_tag")
+  @@map("palette_play_tags")
+  @@schema("palette")
+}
+
+/// シリーズ(連作戯曲・三部作など)。作家が自分の作品をまとめるグループ。
+/// PalettePlay.seriesId / seriesOrder で関連付け。
+model PaletteSeries {
+  id          String   @id @default(cuid())
+  authorId    String   @map("author_id")
+  title       String
+  description String?
+  coverImageUrl String? @map("cover_image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  plays PalettePlay[]
+
+  @@index([authorId, createdAt(sort: Desc)], map: "idx_palette_series_author")
+  @@map("palette_series")
+  @@schema("palette")
 }
 
 model PaletteGenre {
@@ -59,6 +116,7 @@ model PaletteGenre {
   plays PalettePlayGenre[]
 
   @@map("palette_genres")
+  @@schema("palette")
 }
 
 model PalettePlayGenre {
@@ -70,6 +128,7 @@ model PalettePlayGenre {
 
   @@id([playId, genreId])
   @@map("palette_play_genres")
+  @@schema("palette")
 }
 
 model PalettePermission {
@@ -109,6 +168,7 @@ model PalettePermission {
   @@index([applicantId], map: "idx_palette_permission_applicant")
   @@index([status], map: "idx_palette_permission_status")
   @@map("palette_permissions")
+  @@schema("palette")
 }
 
 /// スレッド本体。次の2 種類を共存させる。
@@ -133,6 +193,7 @@ model PaletteThread {
   @@index([participant1, lastAt(sort: Desc)], map: "idx_palette_thread_p1")
   @@index([participant2, lastAt(sort: Desc)], map: "idx_palette_thread_p2")
   @@map("palette_threads")
+  @@schema("palette")
 }
 
 /// スレッド内のメッセージ。
@@ -154,6 +215,7 @@ model PaletteMessage {
   @@index([threadId, createdAt], map: "idx_palette_message_thread")
   @@index([senderId, readAt], map: "idx_palette_message_unread")
   @@map("palette_messages")
+  @@schema("palette")
 }
 
 /// 作家フォロー。followerId が followeeId をフォローしている記録。
@@ -168,6 +230,7 @@ model PaletteFollow {
   @@index([followerId, createdAt(sort: Desc)], map: "idx_palette_follows_follower")
   @@index([followeeId, createdAt(sort: Desc)], map: "idx_palette_follows_followee")
   @@map("palette_follows")
+  @@schema("palette")
 }
 
 /// 作品をユーザーがブックマーク（お気に入り）した記録。
@@ -184,6 +247,7 @@ model PaletteBookmark {
   @@index([userId, createdAt(sort: Desc)], map: "idx_palette_bookmarks_user")
   @@index([playId], map: "idx_palette_bookmarks_play")
   @@map("palette_bookmarks")
+  @@schema("palette")
 }
 
 /// 添付ファイル。messageId / permissionId の排他リレーション（アプリ層で担保）。
@@ -204,6 +268,7 @@ model PaletteAttachment {
   @@index([permissionId], map: "idx_palette_attachment_permission")
   @@index([messageId], map: "idx_palette_attachment_message")
   @@map("palette_attachments")
+  @@schema("palette")
 }
 
 model PalettePayment {
@@ -222,6 +287,7 @@ model PalettePayment {
   permission PalettePermission @relation(fields: [permissionId], references: [id])
 
   @@map("palette_payments")
+  @@schema("palette")
 }
 
 model PaletteStripeAccount {
@@ -233,6 +299,7 @@ model PaletteStripeAccount {
   updatedAt            DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("palette_stripe_accounts")
+  @@schema("palette")
 }
 
 model PaletteNotification {
@@ -247,6 +314,7 @@ model PaletteNotification {
 
   @@index([userId, isRead, createdAt(sort: Desc)], map: "idx_palette_notification_user")
   @@map("palette_notifications")
+  @@schema("palette")
 }
 
 model PaletteReview {
@@ -264,5 +332,6 @@ model PaletteReview {
   @@index([playId, createdAt(sort: Desc)], map: "idx_palette_review_play")
   @@index([userId], map: "idx_palette_review_user")
   @@map("palette_reviews")
+  @@schema("palette")
 }
 

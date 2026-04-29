@@ -71,7 +71,7 @@ export async function getReviews(playId: string, page = 1, perPage = 10) {
     const users = await prisma.$queryRaw<
       Array<{ id: string; displayName: string | null; name: string | null; avatarUrl: string | null }>
     >`
-      SELECT id, "displayName", name, "avatarUrl" FROM "User" WHERE id = ANY(${userIds})
+      SELECT id, "displayName", name, "avatarUrl" FROM "public"."User" WHERE id = ANY(${userIds})
     `;
     userMap = new Map(
       users.map((u) => [

@@ -83,6 +83,12 @@ export type PermissionInThread = {
   withdrawnReason: string | null;
   paidAt: string | null;
   expiresAt: string | null;
+  /** 申請日時 */
+  createdAt: string;
+  /** 申請者(ユーザー) */
+  applicant: ThreadUser;
+  /** 執筆者(作家) */
+  author: ThreadUser;
 };
 
 /** スレッド詳細 */

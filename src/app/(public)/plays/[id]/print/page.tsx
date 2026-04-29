@@ -30,7 +30,7 @@ export default async function PrintPlayPage({ params }: Props) {
   // Get author name
   const authors = await prisma.$queryRaw<
     any[]
-  >`SELECT "displayName" FROM "User" WHERE id = ${play.authorId}`;
+  >`SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}`;
   const authorName = authors[0]?.displayName ?? "不明";
 
   return (

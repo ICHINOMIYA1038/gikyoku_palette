@@ -33,7 +33,7 @@ export async function getRankings(type: RankingType = "views", limit = 50) {
   let authorMap = new Map<string, any>();
   if (authorIds.length > 0) {
     const authors = await prisma.$queryRaw<any[]>`
-      SELECT id, "displayName", "avatarUrl" FROM "User" WHERE id = ANY(${authorIds})
+      SELECT id, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${authorIds})
     `;
     authorMap = new Map(authors.map((a: any) => [a.id, a]));
   }
@@ -60,7 +60,7 @@ export async function getPopularPlays(limit = 6) {
   let authorMap = new Map<string, any>();
   if (authorIds.length > 0) {
     const authors = await prisma.$queryRaw<any[]>`
-      SELECT id, "displayName", "avatarUrl" FROM "User" WHERE id = ANY(${authorIds})
+      SELECT id, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${authorIds})
     `;
     authorMap = new Map(authors.map((a: any) => [a.id, a]));
   }

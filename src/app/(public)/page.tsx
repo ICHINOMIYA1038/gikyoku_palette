@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 import { getPlays, getGenres, getStats } from "@/actions/plays";
-import { getPopularPlays } from "@/actions/rankings";
 import { getAuthors } from "@/actions/authors";
 import { getNews } from "@/actions/news";
+import { getPopularTags } from "@/actions/tags";
 import { PlayCard } from "@/components/plays/play-card";
 import { AuthorCard } from "@/components/authors/author-card";
 import { SearchBar } from "@/components/plays/search-bar";
@@ -11,6 +12,8 @@ import { FilterPanel } from "@/components/plays/filter-panel";
 import { SortSelector } from "@/components/plays/sort-selector";
 import { Pagination } from "@/components/ui/pagination";
 import { NewsFeed } from "@/components/home/news-feed";
+import { HomePopular } from "@/components/home/home-popular";
+import { HomeSidebar } from "@/components/home/home-sidebar";
 
 export default async function HomePage({
   searchParams,
@@ -25,6 +28,10 @@ export default async function HomePage({
   }>;
 }) {
   const params = await searchParams;
+  const session = await auth();
+  const loggedIn = !!session?.user?.id;
+  const userName = session?.user?.name ?? null;
+
   const [
     { plays, total, totalPages, currentPage },
     { plays: popularPlays },
@@ -33,6 +40,7 @@ export default async function HomePage({
     stats,
     { authors: featuredAuthors },
     news,
+    popularTags,
   ] = await Promise.all([
     getPlays({
       search: params.q,
@@ -44,72 +52,86 @@ export default async function HomePage({
         "newest",
       page: params.page ? parseInt(params.page) : 1,
     }),
-    getPlays({ sortBy: "views", perPage: 8 }),
+    getPlays({ sortBy: "views", perPage: 10 }),
     getPlays({ sortBy: "newest", perPage: 6 }),
     getGenres(),
     getStats(),
     getAuthors({ sort: "plays", perPage: 4 }),
-    getNews({ days: 14, limit: 40 }),
+    getNews({ days: 7, limit: 15 }),
+    getPopularTags(20),
   ]);
+
+  const popularForList = popularPlays.slice(0, 8).map((p) => ({
+    id: p.id,
+    title: p.title,
+    coverImageUrl: p.coverImageUrl,
+    authorName: p.author?.displayName || "不明",
+    durationMinutes: p.durationMinutes,
+    castTotal: p.castTotal,
+    isFree: p.isFree,
+    feeAmount: p.feeAmount,
+    viewCount: p.viewCount,
+    avgRating: p.avgRating,
+    reviewCount: p.reviewCount,
+  }));
 
   return (
     <div>
-      {/* ===== Hero Section ===== */}
-      <section className="border-b border-gray-100">
-        <div className="container mx-auto px-4 max-w-5xl py-16 md:py-24 text-center">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold text-gray-900 leading-tight">
-            あなたの戯曲を、世界に届けよう
-          </h1>
-          <p className="mt-4 text-base md:text-lg text-gray-500 max-w-xl mx-auto">
-            戯曲の投稿・検索・上演許可申請プラットフォーム
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="#search"
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-gray-900 px-6 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
-            >
-              作品を探す
-            </a>
-            <Link
-              href="/dashboard/plays/new"
-              className="inline-flex h-11 items-center justify-center rounded-lg border border-gray-300 px-6 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              作品を投稿する
-            </Link>
+      {/* ===== 3-Column Top Section ===== */}
+      <section className="border-b border-gray-100 bg-gradient-to-b from-pink-50/40 to-white">
+        <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">
+          {/* 小さなページ見出し (モバイルのみ) */}
+          <div className="mb-4 text-center lg:hidden">
+            <h1 className="font-serif text-2xl font-bold text-gray-900">
+              戯曲パレット
+            </h1>
+            <p className="mt-1 text-xs text-gray-500">
+              作家と劇団をつなぐ、戯曲のプラットフォーム
+            </p>
           </div>
-          <div className="mt-10 flex justify-center gap-8 text-sm text-gray-400">
-            <span>
-              <strong className="text-gray-700 font-semibold">
-                {stats.playCount}
-              </strong>{" "}
-              作品
-            </span>
-            <span>
-              <strong className="text-gray-700 font-semibold">
-                {stats.authorCount}
-              </strong>{" "}
-              作家
-            </span>
-            <span>
-              <strong className="text-gray-700 font-semibold">
-                {stats.reviewCount}
-              </strong>{" "}
-              レビュー
-            </span>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-6">
+            {/* 左: News */}
+            <div className="order-3 lg:order-1">
+              {news.length > 0 ? (
+                <NewsFeed items={news} />
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-white p-4 text-center text-sm text-gray-400">
+                  まだニュースはありません
+                </div>
+              )}
+            </div>
+
+            {/* 中央: 人気作品 */}
+            <div className="order-1 lg:order-2">
+              {popularForList.length > 0 ? (
+                <HomePopular plays={popularForList} />
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
+                  まだ作品がありません
+                </div>
+              )}
+            </div>
+
+            {/* 右: コンセプト + CTA + Stats */}
+            <div className="order-2 lg:order-3">
+              <HomeSidebar
+                loggedIn={loggedIn}
+                userName={userName}
+                stats={stats}
+                authors={featuredAuthors.slice(0, 4).map((a: any) => ({
+                  id: a.id,
+                  displayName: a.displayName,
+                  avatarUrl: a.avatarUrl,
+                  playCount: a.play_count ?? 0,
+                }))}
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ===== News Feed ===== */}
-      {news.length > 0 && (
-        <section className="border-b border-gray-100 py-8 md:py-10">
-          <div className="container mx-auto max-w-3xl px-4">
-            <NewsFeed items={news} />
-          </div>
-        </section>
-      )}
-
-      {/* ===== Genre Chips Section ===== */}
+      {/* ===== Genre Chips ===== */}
       {genres.length > 0 && (
         <section className="border-b border-gray-100 py-4">
           <div className="container mx-auto px-4 max-w-5xl">
@@ -128,43 +150,26 @@ export default async function HomePage({
         </section>
       )}
 
-      {/* ===== Popular Plays Section ===== */}
-      {popularPlays.length > 0 && (
-        <section className="py-12 md:py-16">
+      {/* ===== Popular Tags ===== */}
+      {popularTags.length > 0 && (
+        <section className="border-b border-gray-100 py-4">
           <div className="container mx-auto px-4 max-w-5xl">
-            <div className="flex items-baseline justify-between mb-8">
-              <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900">
-                人気の作品
-              </h2>
-              <Link
-                href="/rankings"
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                すべて見る →
-              </Link>
-            </div>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {popularPlays.slice(0, 6).map((play) => (
-                <PlayCard
-                  key={play.id}
-                  id={play.id}
-                  title={play.title}
-                  authorName={play.author?.displayName || "不明"}
-                  authorId={play.authorId}
-                  synopsis={play.synopsis}
-                  durationMinutes={play.durationMinutes}
-                  castTotal={play.castTotal}
-                  genres={play.genres.map((pg: any) => ({
-                    name: pg.genre.name,
-                  }))}
-                  isFree={play.isFree}
-                  feeAmount={play.feeAmount}
-                  viewCount={play.viewCount}
-                  avgRating={play.avgRating}
-                  reviewCount={play.reviewCount}
-                  coverImageUrl={play.coverImageUrl}
-                />
-              ))}
+            <div className="flex items-center gap-3">
+              <p className="shrink-0 text-xs font-medium uppercase tracking-wider text-pink-600">
+                Tags
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                {popularTags.map((t) => (
+                  <Link
+                    key={t.id}
+                    href={`/tags/${t.slug}`}
+                    className="inline-flex items-center rounded-full bg-pink-50 border border-pink-100 px-2.5 py-0.5 text-xs font-medium text-pink-700 hover:bg-pink-100 whitespace-nowrap transition-colors"
+                  >
+                    #{t.name}
+                    <span className="ml-1 text-pink-400">{t.playCount}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -172,9 +177,9 @@ export default async function HomePage({
 
       {/* ===== New Plays Section ===== */}
       {newPlays.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50/50">
+        <section className="py-10 md:py-14 bg-gray-50/50">
           <div className="container mx-auto px-4 max-w-5xl">
-            <div className="flex items-baseline justify-between mb-8">
+            <div className="flex items-baseline justify-between mb-6">
               <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900">
                 新着作品
               </h2>
@@ -207,9 +212,9 @@ export default async function HomePage({
       )}
 
       {/* ===== Search Section ===== */}
-      <section id="search" className="py-12 md:py-16 scroll-mt-4">
+      <section id="search" className="py-10 md:py-14 scroll-mt-4">
         <div className="container mx-auto px-4 max-w-5xl">
-          <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900 mb-8">
+          <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900 mb-6">
             作品を検索
           </h2>
 
@@ -290,9 +295,9 @@ export default async function HomePage({
 
       {/* ===== Featured Authors Section ===== */}
       {featuredAuthors.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50/50">
+        <section className="py-10 md:py-14 bg-gray-50/50">
           <div className="container mx-auto px-4 max-w-5xl">
-            <div className="flex items-baseline justify-between mb-8">
+            <div className="flex items-baseline justify-between mb-6">
               <h2 className="text-lg md:text-xl font-serif font-bold text-gray-900">
                 注目の作家
               </h2>
