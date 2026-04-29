@@ -148,8 +148,8 @@ export async function getDashboardAnalytics() {
     // 直近30日の申請数（自分の作品宛）
     prisma.$queryRaw<Array<{ d: Date; c: bigint }>>`
       SELECT date_trunc('day', p.created_at) AS d, COUNT(*) AS c
-      FROM palette_permissions p
-      JOIN palette_plays pl ON pl.id = p.play_id
+      FROM palette.palette_permissions p
+      JOIN palette.palette_plays pl ON pl.id = p.play_id
       WHERE pl.author_id = ${userId}
         AND p.created_at >= ${thirtyDaysAgo}
       GROUP BY 1 ORDER BY 1
@@ -157,9 +157,9 @@ export async function getDashboardAnalytics() {
     // 直近6ヶ月の月別売上（執筆者受取額）
     prisma.$queryRaw<Array<{ m: Date; c: bigint }>>`
       SELECT date_trunc('month', pay.completed_at) AS m, SUM(pay.author_amount) AS c
-      FROM palette_payments pay
-      JOIN palette_permissions p ON p.id = pay.permission_id
-      JOIN palette_plays pl ON pl.id = p.play_id
+      FROM palette.palette_payments pay
+      JOIN palette.palette_permissions p ON p.id = pay.permission_id
+      JOIN palette.palette_plays pl ON pl.id = p.play_id
       WHERE pl.author_id = ${userId}
         AND pay.status = 'completed'
         AND pay.completed_at >= ${sixMonthsAgo}

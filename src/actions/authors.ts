@@ -25,7 +25,7 @@ export async function getAuthors({
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
         FROM "public"."User" u
-        INNER JOIN palette_plays p ON p.author_id = u.id AND p.is_published = true
+        INNER JOIN palette.palette_plays p ON p.author_id = u.id AND p.is_published = true
         GROUP BY u.id
         ORDER BY MIN(p.created_at) DESC
         LIMIT ${perPage} OFFSET ${offset}
@@ -36,7 +36,7 @@ export async function getAuthors({
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
         FROM "public"."User" u
-        INNER JOIN palette_plays p ON p.author_id = u.id AND p.is_published = true
+        INNER JOIN palette.palette_plays p ON p.author_id = u.id AND p.is_published = true
         GROUP BY u.id
         ORDER BY u."displayName" ASC
         LIMIT ${perPage} OFFSET ${offset}
@@ -48,7 +48,7 @@ export async function getAuthors({
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
         FROM "public"."User" u
-        INNER JOIN palette_plays p ON p.author_id = u.id AND p.is_published = true
+        INNER JOIN palette.palette_plays p ON p.author_id = u.id AND p.is_published = true
         GROUP BY u.id
         ORDER BY play_count DESC, u."displayName" ASC
         LIMIT ${perPage} OFFSET ${offset}
@@ -58,7 +58,7 @@ export async function getAuthors({
 
   const countResult = await prisma.$queryRaw<any[]>`
     SELECT COUNT(DISTINCT p.author_id)::int as total
-    FROM palette_plays p
+    FROM palette.palette_plays p
     WHERE p.is_published = true
   `;
 

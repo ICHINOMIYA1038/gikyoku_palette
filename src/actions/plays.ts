@@ -134,7 +134,7 @@ export async function getGenres() {
 export async function getStats() {
   const [playCount, authorCount, reviewCount] = await Promise.all([
     prisma.palettePlay.count({ where: { isPublished: true } }),
-    prisma.$queryRaw<any[]>`SELECT COUNT(DISTINCT author_id)::int as count FROM palette_plays WHERE is_published = true`,
+    prisma.$queryRaw<any[]>`SELECT COUNT(DISTINCT author_id)::int as count FROM palette.palette_plays WHERE is_published = true`,
     prisma.paletteReview.count(),
   ]);
   return {
