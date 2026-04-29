@@ -4,18 +4,19 @@
  */
 
 import { ImageResponse } from "next/og";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 
 export const runtime = "nodejs";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "戯曲パレット";
 
+const LOGO_URL =
+  "https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/logo-palette.png";
+
 export default async function Image_() {
-  const logoPath = join(process.cwd(), "public", "logo-palette.png");
-  const logoData = await readFile(logoPath);
-  const logoBase64 = `data:image/jpeg;base64,${logoData.toString("base64")}`;
+  const logoRes = await fetch(LOGO_URL);
+  const logoBuffer = await logoRes.arrayBuffer();
+  const logoBase64 = `data:image/png;base64,${Buffer.from(logoBuffer).toString("base64")}`;
 
   return new ImageResponse(
     (
@@ -32,17 +33,12 @@ export default async function Image_() {
           fontFamily: "'Hiragino Mincho ProN', serif",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <img
-            src={logoBase64}
-            width={120}
-            height={120}
-            style={{ borderRadius: 16 }}
-          />
-          <p style={{ fontSize: 96, fontWeight: 700, color: "#831843", margin: 0 }}>
-            戯曲パレット
-          </p>
-        </div>
+        <img
+          src={logoBase64}
+          width={800}
+          height={160}
+          style={{ objectFit: "contain" }}
+        />
         <p
           style={{
             marginTop: 32,

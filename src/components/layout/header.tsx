@@ -29,7 +29,7 @@ export async function Header() {
             href="/"
             className="flex items-center gap-2 font-serif text-lg font-bold text-gray-900"
           >
-            <Image src="/logo-palette.png" alt="戯曲パレット" width={400} height={80} className="h-20 w-auto" priority />
+            <Image src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/logo-palette.png" alt="戯曲パレット" width={400} height={80} className="h-20 w-auto" priority />
           </Link>
           <nav className="hidden items-center gap-6 text-sm md:flex">
             <Link
