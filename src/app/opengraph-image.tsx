@@ -4,13 +4,19 @@
  */
 
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export const runtime = "nodejs";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "戯曲パレット";
 
-export default function Image() {
+export default async function Image_() {
+  const logoPath = join(process.cwd(), "public", "logo-palette.png");
+  const logoData = await readFile(logoPath);
+  const logoBase64 = `data:image/jpeg;base64,${logoData.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -27,20 +33,12 @@ export default function Image() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          <div
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: "50%",
-              background: "white",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              fontSize: 48,
-            }}
-          >
-            🎭
-          </div>
+          <img
+            src={logoBase64}
+            width={120}
+            height={120}
+            style={{ borderRadius: 16 }}
+          />
           <p style={{ fontSize: 96, fontWeight: 700, color: "#831843", margin: 0 }}>
             戯曲パレット
           </p>

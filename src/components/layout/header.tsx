@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -26,8 +27,9 @@ export async function Header() {
         <div className="flex items-center gap-8">
           <Link
             href="/"
-            className="font-serif text-lg font-bold text-gray-900"
+            className="flex items-center gap-2 font-serif text-lg font-bold text-gray-900"
           >
+            <Image src="/logo-palette.png" alt="" width={28} height={28} className="rounded" />
             戯曲パレット
           </Link>
           <nav className="hidden items-center gap-6 text-sm md:flex">
