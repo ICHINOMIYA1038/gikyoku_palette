@@ -17,7 +17,7 @@ const LOCAL_DIR = "/tmp/palette-uploads";
 
 function isS3Configured(): boolean {
   return !!(
-    process.env.AWS_S3_BUCKET &&
+    (process.env.AWS_S3_BUCKET || process.env.S3_BUCKET) &&
     (process.env.S3_AWS_ACCESS_KEY || process.env.AWS_ACCESS_KEY) &&
     (process.env.S3_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY)
   );
@@ -27,7 +27,7 @@ let s3Client: S3Client | null = null;
 function getS3() {
   if (!s3Client) {
     s3Client = new S3Client({
-      region: process.env.AWS_REGION || "ap-northeast-1",
+      region: process.env.AWS_REGION || process.env.S3_REGION || "ap-northeast-1",
       credentials: {
         accessKeyId: (process.env.S3_AWS_ACCESS_KEY || process.env.AWS_ACCESS_KEY)!,
         secretAccessKey: (process.env.S3_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY)!,
@@ -54,7 +54,7 @@ export async function saveAttachment(opts: {
   if (isS3Configured()) {
     await getS3().send(
       new PutObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET!,
+        Bucket: (process.env.AWS_S3_BUCKET || process.env.S3_BUCKET)!,
         Key: key,
         Body: opts.body,
         ContentType: opts.contentType,
@@ -74,8 +74,9 @@ export async function saveAttachment(opts: {
  */
 export function getPublicUrl(key: string): string {
   if (isS3Configured()) {
-    const region = process.env.AWS_REGION || "ap-northeast-1";
-    return `https://${process.env.AWS_S3_BUCKET}.s3.${region}.amazonaws.com/${key}`;
+    const region = process.env.AWS_REGION || process.env.S3_REGION || "ap-northeast-1";
+    const bucket = process.env.AWS_S3_BUCKET || process.env.S3_BUCKET;
+    return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
   }
   return `/api/storage/${key}`;
 }
@@ -93,7 +94,7 @@ export async function getAttachmentUrl(
     return getSignedUrl(
       getS3(),
       new GetObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET!,
+        Bucket: (process.env.AWS_S3_BUCKET || process.env.S3_BUCKET)!,
         Key: key,
       }),
       { expiresIn: expiresInSec }
@@ -107,7 +108,7 @@ export async function deleteAttachment(key: string): Promise<void> {
   if (isS3Configured()) {
     await getS3().send(
       new DeleteObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET!,
+        Bucket: (process.env.AWS_S3_BUCKET || process.env.S3_BUCKET)!,
         Key: key,
       })
     );
