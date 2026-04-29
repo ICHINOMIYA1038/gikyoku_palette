@@ -180,6 +180,21 @@ export function HomeSidebar({ loggedIn, userName, stats, authors = [] }: Props) 
           </ul>
         </section>
       )}
+      {/* 戯曲図書館バナー */}
+      <a
+        href="https://gikyokutosyokan.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block cursor-pointer transition-opacity hover:opacity-90"
+      >
+        <Image
+          src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/banners/tosyokan-rect.png"
+          alt="戯曲図書館"
+          width={300}
+          height={250}
+          className="h-auto w-full rounded-lg"
+        />
+      </a>
     </aside>
   );
 }

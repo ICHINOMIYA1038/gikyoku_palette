@@ -6,6 +6,7 @@ import { getPlays, getGenres, getStats } from "@/actions/plays";
 import { getAuthors } from "@/actions/authors";
 import { getNews } from "@/actions/news";
 import { getPopularTags } from "@/actions/tags";
+import Image from "next/image";
 import { PlayCard } from "@/components/plays/play-card";
 import { AuthorCard } from "@/components/authors/author-card";
 import { SearchBar } from "@/components/plays/search-bar";
@@ -306,6 +307,26 @@ export default async function HomePage({
               )}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ===== 戯曲図書館バナー ===== */}
+      <section className="py-8 md:py-10">
+        <div className="container mx-auto px-4 max-w-5xl">
+          <a
+            href="https://gikyokutosyokan.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block cursor-pointer transition-opacity hover:opacity-90"
+          >
+            <Image
+              src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/banners/tosyokan-wide.png"
+              alt="戯曲図書館"
+              width={970}
+              height={250}
+              className="mx-auto h-auto w-full max-w-[970px] rounded-lg"
+            />
+          </a>
         </div>
       </section>
 
