@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { getPlays, getGenres, getStats } from "@/actions/plays";
 import { getAuthors } from "@/actions/authors";
 import { getNews } from "@/actions/news";
@@ -30,7 +31,13 @@ export default async function HomePage({
   const params = await searchParams;
   const session = await auth();
   const loggedIn = !!session?.user?.id;
-  const userName = session?.user?.name ?? null;
+  let userName: string | null = null;
+  if (session?.user?.id) {
+    const rows = await prisma.$queryRaw<Array<{ displayName: string | null; name: string | null }>>`
+      SELECT "displayName", name FROM "public"."User" WHERE id = ${session.user.id}
+    `;
+    userName = rows[0]?.displayName || rows[0]?.name || "マイページ";
+  }
 
   const [
     { plays, total, totalPages, currentPage },
