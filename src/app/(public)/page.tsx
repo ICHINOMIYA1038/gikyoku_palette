@@ -85,6 +85,11 @@ export default async function HomePage({
 
   return (
     <div>
+      {/* ===== Beta Notice Banner ===== */}
+      <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm text-amber-800">
+        本サービスはベータ版です。予告なくサービスを終了する場合があります。メッセージ機能は電気通信事業届出の承認待ちのため、現在ご利用いただけません。
+      </div>
+
       {/* ===== 3-Column Top Section ===== */}
       <section className="border-b border-gray-100 bg-gradient-to-b from-pink-50/40 to-white">
         <div className="container mx-auto max-w-6xl px-4 py-6 md:py-8">

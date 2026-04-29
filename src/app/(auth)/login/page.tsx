@@ -161,6 +161,10 @@ export default async function LoginPage({
               </p>
             </div>
 
+            <p className="mt-3 text-center text-xs text-gray-400">
+              ※ 本サービスはベータ版です。予告なくサービスを終了する場合があります。
+            </p>
+
             <p className="mt-4 text-center text-xs text-gray-400">
               姉妹サイト{" "}
               <a
