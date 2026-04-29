@@ -145,14 +145,14 @@ export default async function LoginPage({
               <p className="mt-4 text-[11px] text-center text-gray-400 leading-relaxed">
                 ログインにより
                 <Link
-                  href="/support/terms"
+                  href="/terms"
                   className="text-gray-500 underline hover:text-gray-700"
                 >
                   利用規約
                 </Link>
                 および
                 <Link
-                  href="/support/privacy"
+                  href="/privacy"
                   className="text-gray-500 underline hover:text-gray-700"
                 >
                   プライバシーポリシー
