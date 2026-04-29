@@ -2,6 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { Clock, Users, Eye, Star } from "lucide-react";
 
+const NO_IMAGE_URL =
+  "https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/no-image-palette.png";
+
 const ACCENT_COLORS = [
   "#6366f1", "#0891b2", "#059669", "#d97706",
   "#dc2626", "#7c3aed", "#2563eb", "#db2777",
@@ -41,20 +44,15 @@ export function PlayCard({
   return (
     <Link href={`/plays/${id}`} className="block group">
       <div className="h-full rounded-lg border border-gray-200 bg-white transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 overflow-hidden flex flex-col">
-        {coverImageUrl ? (
-          <div className="relative aspect-video w-full">
-            <Image src={coverImageUrl} alt={title} fill className="object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
-          </div>
-        ) : (
-          <div>
-            <div className="h-1 w-full" style={{ backgroundColor: getAccentColor(title) }} />
-            <div className="px-5 pt-5 pb-1">
-              <h3 className="text-xl font-serif font-bold leading-snug line-clamp-2 text-gray-900">
-                {title}
-              </h3>
-            </div>
-          </div>
-        )}
+        <div className="relative aspect-[2/3] w-full">
+          <Image
+            src={coverImageUrl || NO_IMAGE_URL}
+            alt={title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          />
+        </div>
 
         <div className="px-5 py-3 space-y-2.5 flex-1">
           <p className="text-sm text-gray-500">{authorName}</p>

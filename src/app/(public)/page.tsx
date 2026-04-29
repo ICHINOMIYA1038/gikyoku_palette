@@ -281,12 +281,21 @@ export default async function HomePage({
                 params.duration ||
                 params.cast
               ) && (
-                <Link
-                  href="/dashboard/plays/new"
-                  className="inline-flex h-11 items-center justify-center rounded-lg bg-gray-900 px-6 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
-                >
-                  最初の作品を投稿する
-                </Link>
+                loggedIn ? (
+                  <Link
+                    href="/dashboard/plays/new"
+                    className="inline-flex h-11 items-center justify-center rounded-lg bg-gray-900 px-6 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+                  >
+                    最初の作品を投稿する
+                  </Link>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="inline-flex h-11 items-center justify-center rounded-lg bg-gray-900 px-6 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+                  >
+                    ログインして投稿する
+                  </Link>
+                )
               )}
             </div>
           )}

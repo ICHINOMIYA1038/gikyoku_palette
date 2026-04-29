@@ -95,7 +95,12 @@ export default async function PlayDetailPage({ params }: Props) {
             <h1 className="text-2xl md:text-3xl font-bold font-serif text-white">
               {play.title}
             </h1>
-            <p className="text-white/80 text-sm mt-1">{authorName}</p>
+            <Link
+              href={`/authors/${play.author?.id}`}
+              className="text-white/80 text-sm mt-1 inline-block hover:text-white transition-colors"
+            >
+              {authorName}
+            </Link>
           </div>
         </div>
       ) : (

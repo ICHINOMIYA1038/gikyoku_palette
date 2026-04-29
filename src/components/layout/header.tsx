@@ -80,7 +80,7 @@ export async function Header() {
                 ログイン
               </Link>
               <Link
-                href="/dashboard/plays/new"
+                href="/login"
                 className="inline-flex h-8 items-center justify-center rounded-md bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800"
               >
                 投稿する
