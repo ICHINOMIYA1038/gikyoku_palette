@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { prisma } from "@/lib/db";
+import { logSecurityEvent } from "./audit-log";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -73,6 +74,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id_token = EXCLUDED.id_token
         `;
       }
+
+      await logSecurityEvent({ type: "login", userId: user.id, details: `provider: ${account?.provider}` });
 
       return true;
     },

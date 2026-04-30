@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { saveAttachment, getPublicUrl } from "@/lib/attachment-storage";
+import { rateLimit } from "@/lib/rate-limit";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -17,6 +18,14 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
+  }
+
+  const { success } = rateLimit(`upload:${session.user.id}`, 10, 60000);
+  if (!success) {
+    return NextResponse.json(
+      { error: "リクエストが多すぎます。しばらく待ってから再試行してください。" },
+      { status: 429 },
+    );
   }
 
   const fd = await req.formData();

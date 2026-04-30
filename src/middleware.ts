@@ -3,6 +3,30 @@ import { NextResponse } from "next/server";
 
 const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads", "/bookmarks", "/following"];
 
+const securityHeaders: Record<string, string> = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "X-XSS-Protection": "1; mode=block",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy":
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: blob: https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com https://lh3.googleusercontent.com; " +
+    "frame-src https://js.stripe.com; " +
+    "connect-src 'self' https://api.stripe.com https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com; " +
+    "font-src 'self' https://fonts.gstatic.com;",
+};
+
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(securityHeaders)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
 export default auth((req) => {
   const isProtected = protectedPaths.some((path) =>
     req.nextUrl.pathname.startsWith(path)
@@ -12,16 +36,16 @@ export default auth((req) => {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", req.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
   if (req.nextUrl.pathname === "/login" && req.auth) {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return applySecurityHeaders(NextResponse.redirect(url));
   }
 
-  return NextResponse.next();
+  return applySecurityHeaders(NextResponse.next());
 });
 
 export const config = {
