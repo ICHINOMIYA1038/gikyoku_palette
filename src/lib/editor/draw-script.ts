@@ -1,11 +1,11 @@
 /**
  * 台本（縦書き）モードのCanvas描画エンジン。
- * TypesettingConfigに基づいてピクセル精度で描画する。
+ * 参考: 『骨壷』いちのみや（劇団かたかご）の台本レイアウトを再現。
+ * 全ブロックが同一の列フローで流れる。タイトル・登場人物も列として扱う。
  */
 import {
   type PlayDocument,
   type CursorPosition,
-  type Block,
   type TypesettingConfig,
   DEFAULT_TYPESETTING,
 } from "./play-document";
@@ -20,13 +20,15 @@ export type ColLayout = {
   chars: string;
   startCharIndex: number;
   page: number;
+  /** タイトルページの特殊列（タイトル/作者/キャストラベル/キャラ名） */
+  special?: "title" | "author" | "castLabel" | "castChar";
 };
 
 function resolveLayout(cfg: TypesettingConfig, canvasW: number, canvasH: number) {
   const fontSize = cfg.fontSize * PT2PX;
   const speakerFontSize = cfg.speakerFontSize * PT2PX;
   const charH = fontSize + Math.round(fontSize * 0.35);
-  const colW = fontSize + Math.round(fontSize * 0.75); // 列幅を広げた
+  const colW = fontSize + Math.round(fontSize * 0.85);
   const marginTop = cfg.marginTop * MM2PX;
   const marginBottom = cfg.marginBottom * MM2PX;
   const marginLeft = cfg.marginLeft * MM2PX;
@@ -38,14 +40,12 @@ function resolveLayout(cfg: TypesettingConfig, canvasW: number, canvasH: number)
   const bodyH = canvasH - marginBottom - bodyTop - (cfg.showPageNumber ? 28 : 0);
   const maxChars = Math.max(1, Math.floor(bodyH / charH));
   const maxCols = Math.max(1, Math.floor((canvasW - marginLeft - marginRight) / colW));
-  // タイトルページ用に右端に確保する列数
-  const titleReservedCols = 5;
 
   return {
     fontSize, speakerFontSize, charH, colW,
     marginTop, marginBottom, marginLeft, marginRight,
     speakerAreaH, headerH, sepY, bodyTop, bodyH,
-    maxChars, maxCols, titleReservedCols,
+    maxChars, maxCols,
   };
 }
 
@@ -56,7 +56,7 @@ function fontStr(size: number, cfg: TypesettingConfig, bold = false) {
   return `${bold ? "bold " : ""}${size}px ${family}`;
 }
 
-/** 列レイアウトを計算 */
+/** 列レイアウト計算 — 全ブロックが同一フローで流れる */
 export function computeColumns(
   doc: PlayDocument,
   canvasW: number,
@@ -65,14 +65,8 @@ export function computeColumns(
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const L = resolveLayout(cfg, canvasW, canvasH);
   const cols: ColLayout[] = [];
-
-  // ページ0ではタイトル領域を確保して、セリフ開始位置をずらす
-  const hasTitlePage = doc.blocks.some((b) => b.type === "title");
   let x = canvasW - L.marginRight - L.colW / 2;
-  if (hasTitlePage) {
-    x -= L.colW * L.titleReservedCols; // タイトル分ずらす
-  }
-  let colsOnPage = hasTitlePage ? L.titleReservedCols : 0;
+  let colsOnPage = 0;
   let page = 0;
 
   const nextCol = () => {
@@ -88,58 +82,73 @@ export function computeColumns(
   for (let bi = 0; bi < doc.blocks.length; bi++) {
     const block = doc.blocks[bi];
 
-    // タイトル・キャスト・設定はページ0の右端領域に描画（列計算から除外）
-    if (block.type === "title" || block.type === "castList") continue;
-
-    if (block.type === "setting") {
-      // 設定はト書きとして描画
-      cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "", startCharIndex: 0, page });
-      nextCol();
-      continue;
-    }
-
-    if (block.type === "endMark") {
-      cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "", startCharIndex: 0, page });
-      nextCol();
-      continue;
-    }
-
-    if (block.type === "sceneHeading") {
-      // 場面は前後に空列を入れる
-      if (colsOnPage > (hasTitlePage && page === 0 ? L.titleReservedCols : 0)) {
-        nextCol(); // 前に1列空ける
-      }
-      cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "", startCharIndex: 0, page });
-      nextCol();
-      nextCol(); // 後ろにも1列空ける
-      continue;
-    }
-
-    if (block.type === "togaki") {
-      const text = block.text || "";
-      if (text.length === 0) {
-        cols.push({ blockIndex: bi, field: "text", x, chars: "", startCharIndex: 0, page });
+    switch (block.type) {
+      case "title":
+        // タイトル: 1列
+        cols.push({ blockIndex: bi, field: "title", x, chars: block.title || "", startCharIndex: 0, page, special: "title" });
         nextCol();
-      } else {
-        for (let i = 0; i < text.length; i += L.maxChars) {
+        // 作者: 1列
+        cols.push({ blockIndex: bi, field: "author", x, chars: block.author || "", startCharIndex: 0, page, special: "author" });
+        nextCol();
+        break;
+
+      case "castList":
+        // 「登場人物」ラベル: 1列
+        cols.push({ blockIndex: bi, field: "text", x, chars: "登場人物", startCharIndex: 0, page, special: "castLabel" });
+        nextCol();
+        // 各キャラクター名: 各1列
+        for (let ci = 0; ci < block.characters.length; ci++) {
+          cols.push({ blockIndex: bi, field: "text", x, chars: block.characters[ci].name, startCharIndex: ci, page, special: "castChar" });
+          nextCol();
+        }
+        break;
+
+      case "setting": {
+        const text = block.text || "";
+        for (let i = 0; i < Math.max(1, text.length); i += L.maxChars) {
           cols.push({ blockIndex: bi, field: "text", x, chars: text.slice(i, i + L.maxChars), startCharIndex: i, page });
           nextCol();
         }
+        break;
       }
-      continue;
-    }
 
-    if (block.type === "serif") {
-      const speech = block.speech || "";
-      if (speech.length === 0) {
-        cols.push({ blockIndex: bi, field: "speech", x, chars: "", startCharIndex: 0, page });
+      case "sceneHeading":
+        cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "", startCharIndex: 0, page });
         nextCol();
-      } else {
-        for (let i = 0; i < speech.length; i += L.maxChars) {
-          cols.push({ blockIndex: bi, field: "speech", x, chars: speech.slice(i, i + L.maxChars), startCharIndex: i, page });
+        break;
+
+      case "togaki": {
+        const text = block.text || "";
+        if (text.length === 0) {
+          cols.push({ blockIndex: bi, field: "text", x, chars: "", startCharIndex: 0, page });
           nextCol();
+        } else {
+          for (let i = 0; i < text.length; i += L.maxChars) {
+            cols.push({ blockIndex: bi, field: "text", x, chars: text.slice(i, i + L.maxChars), startCharIndex: i, page });
+            nextCol();
+          }
         }
+        break;
       }
+
+      case "serif": {
+        const speech = block.speech || "";
+        if (speech.length === 0) {
+          cols.push({ blockIndex: bi, field: "speech", x, chars: "", startCharIndex: 0, page });
+          nextCol();
+        } else {
+          for (let i = 0; i < speech.length; i += L.maxChars) {
+            cols.push({ blockIndex: bi, field: "speech", x, chars: speech.slice(i, i + L.maxChars), startCharIndex: i, page });
+            nextCol();
+          }
+        }
+        break;
+      }
+
+      case "endMark":
+        cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "おわり", startCharIndex: 0, page });
+        nextCol();
+        break;
     }
   }
 
@@ -160,13 +169,12 @@ export function drawScript(
   const L = resolveLayout(cfg, w, h);
   const bodyFont = fontStr(L.fontSize, cfg);
   const speakerFont = fontStr(L.speakerFontSize, cfg, true);
-  const titleFont = fontStr(L.fontSize * 1.6, cfg, true);
 
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, w, h);
 
-  // ─── ヘッダー ───
+  // ─── ヘッダー（横書き、左上） ───
   if (cfg.showHeader) {
     const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
     const headerText = cfg.headerText || (titleBlock ? `『${titleBlock.title}』${titleBlock.author}` : "");
@@ -178,9 +186,9 @@ export function drawScript(
     }
   }
 
-  // ─── 区切り線 ───
-  ctx.strokeStyle = "#bbb";
-  ctx.lineWidth = 1;
+  // ─── 区切り線（話者名エリアとセリフエリアの境界） ───
+  ctx.strokeStyle = "#aaa";
+  ctx.lineWidth = 0.5;
   ctx.beginPath();
   ctx.moveTo(L.marginLeft, L.sepY);
   ctx.lineTo(w - L.marginRight, L.sepY);
@@ -196,90 +204,7 @@ export function drawScript(
     ctx.fillText(pageNum, (w - pw) / 2, h - 10);
   }
 
-  // ─── タイトルページ（page 0 右端領域） ───
-  if (currentPage === 0) {
-    const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
-    const castBlock = doc.blocks.find((b) => b.type === "castList") as any;
-    const titleX = w - L.marginRight - L.colW * 0.5;
-
-    ctx.textBaseline = "top";
-
-    if (titleBlock) {
-      // タイトル（大きく）
-      ctx.font = titleFont;
-      ctx.fillStyle = "#111";
-      const title = titleBlock.title || "";
-      for (let i = 0; i < title.length; i++) {
-        const ch = title[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, titleX - cw / 2, L.bodyTop + i * (L.fontSize * 1.6 + 8));
-      }
-
-      // 作者名（タイトルの左1列）
-      ctx.font = fontStr(L.fontSize * 0.7, cfg);
-      ctx.fillStyle = "#555";
-      const authorX = titleX - L.colW * 1.5;
-      const author = titleBlock.author || "";
-      for (let i = 0; i < author.length; i++) {
-        const ch = author[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, authorX - cw / 2, L.bodyTop + 8 + i * (L.fontSize * 0.7 + 4));
-      }
-
-      // タイトルカーソル
-      if (cursor && doc.blocks[cursor.blockIndex]?.type === "title") {
-        ctx.fillStyle = "#3b82f6";
-        if (cursor.field === "title") {
-          const cy = L.bodyTop + cursor.charIndex * (L.fontSize * 1.6 + 8);
-          ctx.fillRect(titleX - L.fontSize * 0.8, cy, L.fontSize * 1.6 + 2, 3);
-        } else if (cursor.field === "author") {
-          const cy = L.bodyTop + 8 + cursor.charIndex * (L.fontSize * 0.7 + 4);
-          ctx.fillRect(authorX - L.fontSize * 0.35, cy, L.fontSize * 0.7 + 2, 3);
-        }
-      }
-    }
-
-    // 登場人物（タイトルの左2列目から）
-    if (castBlock && castBlock.characters.length > 0) {
-      const castLabelX = titleX - L.colW * 2.5;
-
-      // 「登場人物」ラベル
-      ctx.font = fontStr(L.speakerFontSize * 0.85, cfg, true);
-      ctx.fillStyle = "#888";
-      const label = "登場人物";
-      for (let i = 0; i < label.length; i++) {
-        const ch = label[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, castLabelX - cw / 2, L.bodyTop + i * (L.speakerFontSize + 3));
-      }
-
-      // キャラクター名
-      ctx.font = fontStr(L.speakerFontSize, cfg);
-      ctx.fillStyle = "#333";
-      for (let ci = 0; ci < castBlock.characters.length; ci++) {
-        const { name } = castBlock.characters[ci];
-        const cx = castLabelX - L.colW * (ci + 1);
-        for (let i = 0; i < name.length; i++) {
-          const ch = name[i];
-          const cw = ctx.measureText(ch).width;
-          ctx.fillText(ch, cx - cw / 2, L.bodyTop + i * (L.speakerFontSize + 3));
-        }
-      }
-    }
-
-    // タイトル領域の区切り線（縦）
-    const titleBorderX = titleX - L.colW * L.titleReservedCols + L.colW * 0.3;
-    ctx.strokeStyle = "#ddd";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(titleBorderX, L.sepY + 4);
-    ctx.lineTo(titleBorderX, h - L.marginBottom - 30);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // ─── 通常ブロック描画 ───
+  // ─── 列描画 ───
   ctx.textBaseline = "top";
   let prevBlockIndex = -1;
 
@@ -290,16 +215,71 @@ export function drawScript(
     if (!block) continue;
     const isFirstCol = col.blockIndex !== prevBlockIndex;
     prevBlockIndex = col.blockIndex;
-
     const isActive = cursor?.blockIndex === col.blockIndex;
 
     // アクティブ列ハイライト
     if (isActive) {
-      ctx.fillStyle = "rgba(59, 130, 246, 0.07)";
+      ctx.fillStyle = "rgba(59, 130, 246, 0.06)";
       ctx.fillRect(col.x - L.colW / 2, L.marginTop + L.headerH, L.colW, h - L.marginTop - L.headerH - L.marginBottom);
     }
 
-    // ─── 話者名 ───
+    // ─── 特殊列（タイトルページ要素） ───
+    if (col.special === "title") {
+      ctx.font = fontStr(L.fontSize * 1.5, cfg, true);
+      ctx.fillStyle = "#111";
+      for (let i = 0; i < col.chars.length; i++) {
+        const ch = col.chars[i];
+        const cw = ctx.measureText(ch).width;
+        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + i * (L.fontSize * 1.5 + 8));
+      }
+      // カーソル
+      if (isActive && cursor?.field === "title") {
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(col.x - L.fontSize * 0.75, L.bodyTop + cursor.charIndex * (L.fontSize * 1.5 + 8), L.fontSize * 1.5 + 2, 3);
+      }
+      continue;
+    }
+
+    if (col.special === "author") {
+      ctx.font = fontStr(L.fontSize * 0.7, cfg);
+      ctx.fillStyle = "#555";
+      // 作者名はタイトルより少し下から開始
+      const offsetY = L.fontSize * 2;
+      for (let i = 0; i < col.chars.length; i++) {
+        const ch = col.chars[i];
+        const cw = ctx.measureText(ch).width;
+        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + offsetY + i * (L.fontSize * 0.7 + 4));
+      }
+      if (isActive && cursor?.field === "author") {
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(col.x - L.fontSize * 0.35, L.bodyTop + offsetY + cursor.charIndex * (L.fontSize * 0.7 + 4), L.fontSize * 0.7 + 2, 3);
+      }
+      continue;
+    }
+
+    if (col.special === "castLabel") {
+      ctx.font = fontStr(L.speakerFontSize, cfg);
+      ctx.fillStyle = "#555";
+      for (let i = 0; i < col.chars.length; i++) {
+        const ch = col.chars[i];
+        const cw = ctx.measureText(ch).width;
+        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + i * (L.speakerFontSize + 4));
+      }
+      continue;
+    }
+
+    if (col.special === "castChar") {
+      ctx.font = fontStr(L.speakerFontSize, cfg);
+      ctx.fillStyle = "#333";
+      for (let i = 0; i < col.chars.length; i++) {
+        const ch = col.chars[i];
+        const cw = ctx.measureText(ch).width;
+        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + i * (L.speakerFontSize + 4));
+      }
+      continue;
+    }
+
+    // ─── 話者名（serifの最初の列のみ） ───
     if (isFirstCol && block.type === "serif") {
       ctx.font = speakerFont;
       ctx.fillStyle = "#222";
@@ -311,7 +291,6 @@ export function drawScript(
           L.marginTop + L.headerH + 4 + i * (L.speakerFontSize + 5));
       }
 
-      // 感情指示
       if ((block as any).direction) {
         ctx.font = fontStr(L.speakerFontSize * 0.8, cfg);
         ctx.fillStyle = "#999";
@@ -324,7 +303,6 @@ export function drawScript(
         }
       }
 
-      // 話者名カーソル
       if (isActive && cursor?.field === "speaker") {
         ctx.fillStyle = "#3b82f6";
         ctx.fillRect(col.x - L.fontSize / 2 - 1,
@@ -333,30 +311,14 @@ export function drawScript(
       }
     }
 
-    // ─── ト書きラベル ───
-    if (isFirstCol && block.type === "togaki") {
-      ctx.font = fontStr(L.speakerFontSize * 0.7, cfg);
-      ctx.fillStyle = "#bbb";
-      const label = "ト書";
-      for (let i = 0; i < label.length; i++) {
-        const ch = label[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2,
-          L.marginTop + L.headerH + 4 + i * (L.speakerFontSize * 0.7 + 2));
-      }
-    }
-
-    // ─── テキスト描画 ───
+    // ─── 本文テキスト ───
     ctx.font = bodyFont;
-    ctx.fillStyle = block.type === "togaki" ? "#555" : "#1a1a1a";
-
-    const indent = block.type === "togaki" ? Math.round(L.fontSize * 0.6) : 0;
+    ctx.fillStyle = block.type === "togaki" || block.type === "setting" ? "#333" : "#1a1a1a";
 
     for (let i = 0; i < col.chars.length; i++) {
       const ch = col.chars[i];
       const cw = ctx.measureText(ch).width;
-      ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2,
-        L.bodyTop + indent + i * L.charH);
+      ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2, L.bodyTop + i * L.charH);
     }
 
     // ─── カーソル ───
@@ -364,9 +326,7 @@ export function drawScript(
       const localIdx = cursor.charIndex - col.startCharIndex;
       if (localIdx >= 0 && localIdx <= col.chars.length && (localIdx < L.maxChars || col.chars.length < L.maxChars)) {
         ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - L.fontSize / 2 - 1,
-          L.bodyTop + indent + localIdx * L.charH,
-          L.fontSize + 2, 3);
+        ctx.fillRect(col.x - L.fontSize / 2 - 1, L.bodyTop + localIdx * L.charH, L.fontSize + 2, 3);
       }
     }
   }
@@ -385,50 +345,7 @@ export function hitTestScript(
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const L = resolveLayout(cfg, w, h);
 
-  // タイトル領域のクリック（ページ0のみ）
-  if (currentPage === 0) {
-    const titleX = w - L.marginRight - L.colW * 0.5;
-    const titleBorderX = titleX - L.colW * L.titleReservedCols + L.colW * 0.3;
-
-    if (mx > titleBorderX) {
-      const titleIdx = doc.blocks.findIndex((b) => b.type === "title");
-      if (titleIdx >= 0) {
-        if (mx > titleX - L.colW * 0.8) {
-          return { blockIndex: titleIdx, field: "title", charIndex: (doc.blocks[titleIdx] as any).title.length };
-        } else {
-          return { blockIndex: titleIdx, field: "author", charIndex: (doc.blocks[titleIdx] as any).author.length };
-        }
-      }
-    }
-  }
-
-  // 話者名エリア
-  if (my < L.sepY) {
-    let bestCol: ColLayout | null = null;
-    let bestDist = Infinity;
-    let prevBI = -1;
-    for (const col of cols) {
-      if (col.page !== currentPage) continue;
-      if (col.blockIndex !== prevBI) {
-        const dist = Math.abs(mx - col.x);
-        if (dist < bestDist) { bestDist = dist; bestCol = col; }
-        prevBI = col.blockIndex;
-      }
-    }
-    if (bestCol) {
-      const block = doc.blocks[bestCol.blockIndex];
-      if (block?.type === "serif") {
-        const speaker = block.speaker || "";
-        const charIdx = Math.min(
-          Math.floor((my - L.marginTop - L.headerH - 4) / (L.speakerFontSize + 5)),
-          speaker.length
-        );
-        return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, charIdx) };
-      }
-    }
-  }
-
-  // セリフエリア
+  // 最も近い列を見つける
   let bestCol: ColLayout | null = null;
   let bestDist = Infinity;
   for (const col of cols) {
@@ -436,21 +353,42 @@ export function hitTestScript(
     const dist = Math.abs(mx - col.x);
     if (dist < bestDist) { bestDist = dist; bestCol = col; }
   }
-  if (bestCol) {
-    const block = doc.blocks[bestCol.blockIndex];
-    const indent = block?.type === "togaki" ? Math.round(L.fontSize * 0.6) : 0;
-    const charInCol = Math.min(
-      Math.floor((my - L.bodyTop - indent) / L.charH),
-      bestCol.chars.length
-    );
-    return {
-      blockIndex: bestCol.blockIndex,
-      field: bestCol.field as "speech" | "text",
-      charIndex: bestCol.startCharIndex + Math.max(0, charInCol),
-    };
+  if (!bestCol) return null;
+
+  const block = doc.blocks[bestCol.blockIndex];
+  if (!block) return null;
+
+  // 特殊列
+  if (bestCol.special === "title") {
+    return { blockIndex: bestCol.blockIndex, field: "title", charIndex: bestCol.chars.length };
+  }
+  if (bestCol.special === "author") {
+    return { blockIndex: bestCol.blockIndex, field: "author", charIndex: bestCol.chars.length };
+  }
+  if (bestCol.special === "castLabel" || bestCol.special === "castChar") {
+    return null; // キャストリストは直接編集不可（後で専用UI）
   }
 
-  return null;
+  // 話者名エリア
+  if (my < L.sepY && block.type === "serif") {
+    const speaker = block.speaker || "";
+    const charIdx = Math.min(
+      Math.floor((my - L.marginTop - L.headerH - 4) / (L.speakerFontSize + 5)),
+      speaker.length
+    );
+    return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, charIdx) };
+  }
+
+  // セリフ/テキストエリア
+  const charInCol = Math.min(
+    Math.floor((my - L.bodyTop) / L.charH),
+    bestCol.chars.length
+  );
+  return {
+    blockIndex: bestCol.blockIndex,
+    field: bestCol.field as "speech" | "text",
+    charIndex: bestCol.startCharIndex + Math.max(0, charInCol),
+  };
 }
 
 /** 最大ページ数 */
