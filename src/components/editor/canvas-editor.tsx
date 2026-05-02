@@ -190,6 +190,72 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
 
   const colsRef = useRef<ColLayout[]>([]);
+  const historyRef = useRef<PlayDocument[]>([]);
+
+  // 自動保存
+  const scheduleSave = useCallback(
+    (newDoc: PlayDocument) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(async () => {
+        setSaveStatus("saving");
+        try {
+          const result = await savePlayBody(playId, toBodyJson(newDoc));
+          setSaveStatus(result?.error ? "error" : "saved");
+        } catch {
+          setSaveStatus("error");
+        }
+      }, 800);
+    },
+    [playId]
+  );
+
+  // ドキュメント更新
+  const updateDoc = useCallback(
+    (updater: (prev: PlayDocument) => PlayDocument) => {
+      setDoc((prev) => {
+        const next = updater(prev);
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave]
+  );
+
+  const pushHistory = useCallback(() => {
+    historyRef.current.push(JSON.parse(JSON.stringify(doc)));
+    if (historyRef.current.length > 50) historyRef.current.shift();
+  }, [doc]);
+
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (prev) {
+      setDoc(prev);
+      scheduleSave(prev);
+      setCursor((c) => ({
+        ...c,
+        blockIndex: Math.min(c.blockIndex, prev.blocks.length - 1),
+      }));
+    }
+  }, [scheduleSave]);
+
+  const insertBlock = useCallback(
+    (block: Block) => {
+      pushHistory();
+      const insertAt = cursor.blockIndex + 1;
+      updateDoc((d) => {
+        const newBlocks = [...d.blocks];
+        newBlocks.splice(insertAt, 0, block);
+        return { blocks: newBlocks };
+      });
+      setCursor({
+        blockIndex: insertAt,
+        field: block.type === "serif" ? "speaker" : "text",
+        charIndex: 0,
+      });
+      inputRef.current?.focus();
+    },
+    [cursor.blockIndex, pushHistory, updateDoc]
+  );
 
   // コンテナサイズ監視
   useEffect(() => {
@@ -227,35 +293,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   useEffect(() => {
     document.fonts.ready.then(() => redraw());
   }, [redraw]);
-
-  // 自動保存
-  const scheduleSave = useCallback(
-    (newDoc: PlayDocument) => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
-        setSaveStatus("saving");
-        try {
-          const result = await savePlayBody(playId, toBodyJson(newDoc));
-          setSaveStatus(result?.error ? "error" : "saved");
-        } catch {
-          setSaveStatus("error");
-        }
-      }, 800);
-    },
-    [playId]
-  );
-
-  // ドキュメント更新
-  const updateDoc = useCallback(
-    (updater: (prev: PlayDocument) => PlayDocument) => {
-      setDoc((prev) => {
-        const next = updater(prev);
-        scheduleSave(next);
-        return next;
-      });
-    },
-    [scheduleSave]
-  );
 
   // 現在のフィールドのテキストを取得
   const getFieldText = useCallback(
@@ -346,6 +383,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       if (e.key === "Enter") {
         e.preventDefault();
+        pushHistory();
         if (field === "speaker") {
           // speaker → speech へ移動
           setCursor({ blockIndex, field: "speech", charIndex: 0 });
@@ -371,6 +409,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       if (e.key === "Backspace") {
         e.preventDefault();
+        pushHistory();
         const text = getFieldText(cursor);
         if (charIndex > 0) {
           // 文字削除
@@ -470,7 +509,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         return;
       }
     },
-    [cursor, doc, getFieldText, updateDoc]
+    [cursor, doc, getFieldText, updateDoc, pushHistory]
   );
 
   // テキスト入力（IME対応）
@@ -480,6 +519,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const value = input.value;
       if (!value) return;
       input.value = "";
+      pushHistory();
 
       const { blockIndex, field, charIndex } = cursor;
       const text = getFieldText(cursor);
@@ -500,7 +540,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       });
       setCursor({ ...cursor, charIndex: charIndex + value.length });
     },
-    [cursor, getFieldText, updateDoc]
+    [cursor, getFieldText, updateDoc, pushHistory]
   );
 
   const statusLabels: Record<SaveStatus, string> = {
@@ -512,14 +552,43 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      <div className="flex items-center gap-4 px-4 py-1 text-xs text-gray-400">
-        <span>台本エディタ</span>
+      {/* ツールバー */}
+      <div className="flex items-center gap-1 bg-white border-b border-gray-200 px-3 py-1 shrink-0">
+        <ToolBtn
+          label="セリフ"
+          shortcut="Enter"
+          onClick={() => insertBlock({ type: "serif", speaker: "", speech: "" })}
+        />
+        <ToolBtn
+          label="ト書き"
+          onClick={() => insertBlock({ type: "togaki", text: "" })}
+        />
+        <ToolBtn
+          label="場面"
+          onClick={() => insertBlock({ type: "sceneHeading", text: "" })}
+        />
+
+        <div className="mx-2 h-4 w-px bg-gray-200" />
+
+        <ToolBtn label="元に戻す" shortcut="⌘Z" onClick={undo} />
+
+        <div className="flex-1" />
+
+        <span className="text-xs text-gray-400">
+          {doc.blocks.length}ブロック
+        </span>
         {saveStatus !== "idle" && (
-          <span className={saveStatus === "error" ? "text-red-500" : ""}>
+          <span
+            className={`text-xs ml-3 ${
+              saveStatus === "error" ? "text-red-500" : "text-gray-400"
+            }`}
+          >
             {statusLabels[saveStatus]}
           </span>
         )}
       </div>
+
+      {/* Canvas */}
       <div ref={containerRef} className="relative flex-1">
         <canvas
           ref={canvasRef}
@@ -529,7 +598,15 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         />
         <textarea
           ref={inputRef}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            // Cmd+Z でundo
+            if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+              e.preventDefault();
+              undo();
+              return;
+            }
+            handleKeyDown(e);
+          }}
           onInput={handleInput}
           className="absolute opacity-0 w-0 h-0"
           style={{ top: 0, left: 0 }}
@@ -537,5 +614,31 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         />
       </div>
     </div>
+  );
+}
+
+function ToolBtn({
+  label,
+  shortcut,
+  onClick,
+}: {
+  label: string;
+  shortcut?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+      title={shortcut ? `${label} (${shortcut})` : label}
+    >
+      {label}
+      {shortcut && (
+        <kbd className="text-[10px] text-gray-400 bg-gray-50 border border-gray-200 rounded px-1">
+          {shortcut}
+        </kbd>
+      )}
+    </button>
   );
 }
