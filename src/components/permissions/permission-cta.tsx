@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 
@@ -19,8 +18,8 @@ export function PermissionCta({
       <p className="mb-4 text-sm text-muted-foreground">
         上演料：{isFree ? "無料" : formatCurrency(feeAmount)}
       </p>
-      <Button size="lg" render={<Link href={`/permissions/new/${playId}`} />}>
-        上演許可を申請する
+      <Button size="lg" disabled>
+        上演許可を申請する（準備中）
       </Button>
     </div>
   );

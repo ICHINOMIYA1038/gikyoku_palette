@@ -31,11 +31,11 @@ export async function GET(
   >`SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}`;
   const authorName = authors[0]?.displayName ?? "不明";
 
-  // Increment download count
-  await prisma.palettePlay.update({
-    where: { id },
-    data: { downloadCount: { increment: 1 } },
-  });
+  // Increment download count (raw SQL to avoid updating updated_at)
+  await prisma.$executeRaw`
+    UPDATE palette.palette_plays
+    SET download_count = download_count + 1
+    WHERE id = ${id}`;
 
   const content = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${play.title}

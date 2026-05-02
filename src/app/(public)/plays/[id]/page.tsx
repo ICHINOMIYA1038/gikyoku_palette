@@ -2,14 +2,13 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getPlayById, incrementViewCount } from "@/actions/plays";
 import { getBookmarkState } from "@/actions/bookmarks";
-import { prisma } from "@/lib/db";
 import { DownloadButton } from "@/components/plays/download-button";
 import { BookmarkButton } from "@/components/plays/bookmark-button";
 import { ReviewSection } from "@/components/reviews/review-section";
 import { truncateText } from "@/lib/utils";
 import Link from "next/link";
 import Image from "next/image";
-import { Clock, Users, Banknote, Eye, Download, Star, AlertTriangle } from "lucide-react";
+import { Clock, Users, Banknote, Eye, Download, Star } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PdfViewer } from "@/components/plays/pdf-viewer";
 import { PlayBody } from "@/components/plays/play-body";
@@ -62,16 +61,6 @@ export default async function PlayDetailPage({ params }: Props) {
 
   const authorName = play.author?.displayName ?? "不明な作者";
   const genres = play.genres.map((pg) => pg.genre.name);
-
-  // 有料作品で作家の Stripe Connect 連携が未完なら、申請者に注意喚起する
-  let authorStripeReady = true;
-  if (!play.isFree && play.feeAmount > 0 && play.author?.id) {
-    const stripeAccount = await prisma.paletteStripeAccount.findUnique({
-      where: { userId: play.author.id },
-      select: { onboardingCompleted: true },
-    });
-    authorStripeReady = !!stripeAccount?.onboardingCompleted;
-  }
 
   const bookmarkState = await getBookmarkState(id);
 
@@ -177,23 +166,11 @@ export default async function PlayDetailPage({ params }: Props) {
                   />
                 </div>
                 <DownloadButton playId={play.id} title={play.title} hasBody={!!play.body || !!play.bodyPdfUrl} bodyType={play.bodyType || "text"} bodyPdfUrl={play.bodyPdfUrl} />
-                <Link
-                  href={`/permissions/new/${play.id}`}
-                  className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-gray-900 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+                <div
+                  className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-gray-300 text-sm font-medium text-gray-500 cursor-not-allowed"
                 >
-                  上演許可を申請する
-                </Link>
-                {!authorStripeReady && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
-                    <p className="flex items-start gap-1.5 text-amber-800">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-                      <span>
-                        執筆者の決済受取設定が未完です。申請は受け付けますが、
-                        承認後の上演料お支払いは執筆者の設定完了後となります。
-                      </span>
-                    </p>
-                  </div>
-                )}
+                  上演許可を申請する（準備中）
+                </div>
               </div>
 
               {/* Metadata */}
