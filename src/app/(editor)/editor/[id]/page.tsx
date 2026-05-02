@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { EditorSwitcher } from "./editor-switcher";
+import { CanvasEditor } from "@/components/editor/canvas-editor";
 import { EditorHeader } from "./editor-header";
 
 export const metadata = { title: "執筆エディタ" };
@@ -23,7 +23,7 @@ export default async function EditorPage({ params }: Props) {
   return (
     <>
       <EditorHeader playId={play.id} title={play.title} />
-      <EditorSwitcher
+      <CanvasEditor
         playId={play.id}
         initialContent={play.bodyJson as Record<string, unknown> | null}
       />

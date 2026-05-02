@@ -375,12 +375,11 @@ export async function savePlayBody(
   }
 
   // bodyJson からプレーンテキストを抽出して body にも保存（検索用）
-  const { extractTextFromJson } = await import(
-    "@/lib/editor/helpers/extract-text"
+  const { fromBodyJson, toPlainText } = await import(
+    "@/lib/editor/play-document"
   );
-  const plainText = extractTextFromJson(
-    bodyJson as Parameters<typeof extractTextFromJson>[0]
-  );
+  const playDoc = fromBodyJson(bodyJson as Record<string, unknown>);
+  const plainText = toPlainText(playDoc);
 
   await prisma.palettePlay.update({
     where: { id: playId },
