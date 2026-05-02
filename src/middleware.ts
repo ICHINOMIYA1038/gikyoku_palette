@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads", "/bookmarks", "/following"];
+const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads", "/bookmarks", "/following", "/editor"];
 
 const securityHeaders: Record<string, string> = {
   "X-Frame-Options": "DENY",
