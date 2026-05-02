@@ -160,10 +160,10 @@ export function drawScript(
     const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
     const headerText = cfg.headerText || (titleBlock ? `『${titleBlock.title}』${titleBlock.author}` : "");
     if (headerText) {
-      ctx.font = fontStr(10, cfg);
-      ctx.fillStyle = "#888";
+      ctx.font = fontStr(13, cfg);
+      ctx.fillStyle = "#777";
       ctx.textBaseline = "top";
-      ctx.fillText(headerText, L.marginLeft, L.marginTop);
+      ctx.fillText(headerText, L.marginLeft, L.marginTop + 2);
     }
   }
 
@@ -263,6 +263,13 @@ export function drawScript(
     if (!block) continue;
     const isFirstCol = col.blockIndex !== prevBlockIndex;
     prevBlockIndex = col.blockIndex;
+
+    // アクティブ列ハイライト
+    const isActive = cursor?.blockIndex === col.blockIndex;
+    if (isActive) {
+      ctx.fillStyle = "rgba(59, 130, 246, 0.06)";
+      ctx.fillRect(col.x - L.colW / 2, L.sepY + 1, L.colW, h - L.sepY - L.marginBottom);
+    }
 
     // 話者名（serifの最初の列のみ）
     if (isFirstCol && block.type === "serif") {
