@@ -3,27 +3,18 @@
 import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
 import { Bold, Italic, MessageSquareText, Minus, Heading3 } from "lucide-react";
-import type { ViewMode } from "./play-editor";
 
 type Props = {
   editor: Editor | null;
-  viewMode: ViewMode;
-  onChangeViewMode: (mode: ViewMode) => void;
 };
 
-/**
- * カーソル位置を含むドキュメント直下ブロックの末尾位置を返す。
- * ネストされたノード（serif > speaker 等）内にいても正しく動く。
- */
 function findTopBlockEnd(editor: Editor): number {
   const { $from } = editor.state.selection;
-  // depth 1 = ドキュメント直下のブロック
   const topBlockDepth = Math.min($from.depth, 1);
-  const topBlockEnd = $from.end(topBlockDepth);
-  return topBlockEnd;
+  return $from.end(topBlockDepth);
 }
 
-export function EditorToolbar({ editor, viewMode, onChangeViewMode }: Props) {
+export function EditorToolbar({ editor }: Props) {
   if (!editor) return null;
 
   const insertSerif = () => {
@@ -34,7 +25,6 @@ export function EditorToolbar({ editor, viewMode, onChangeViewMode }: Props) {
       state.schema.nodes.speechContent.create(),
     ]);
     const tr = state.tr.insert(insertPos, newSerif);
-    // 新しいserifのspeaker内にカーソル
     tr.setSelection(TextSelection.create(tr.doc, insertPos + 2));
     editor.view.dispatch(tr);
     editor.view.focus();
@@ -91,27 +81,6 @@ export function EditorToolbar({ editor, viewMode, onChangeViewMode }: Props) {
         icon={<Heading3 className="h-4 w-4" />}
         label="場面"
         onClick={insertSceneHeading}
-      />
-
-      <div className="mx-2 h-5 w-px bg-gray-200" />
-
-      <ToolbarButton
-        icon={<span className="text-[10px] font-bold leading-none">横</span>}
-        label="横書き"
-        active={viewMode === "horizontal"}
-        onClick={() => onChangeViewMode("horizontal")}
-      />
-      <ToolbarButton
-        icon={<span className="text-[10px] font-bold leading-none">縦</span>}
-        label="縦書き"
-        active={viewMode === "vertical"}
-        onClick={() => onChangeViewMode("vertical")}
-      />
-      <ToolbarButton
-        icon={<span className="text-[10px] font-bold leading-none">版</span>}
-        label="印刷プレビュー"
-        active={viewMode === "preview"}
-        onClick={() => onChangeViewMode("preview")}
       />
     </div>
   );
