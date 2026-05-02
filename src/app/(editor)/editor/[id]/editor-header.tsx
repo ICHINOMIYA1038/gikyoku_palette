@@ -16,10 +16,10 @@ export function EditorHeader({ playId, title }: Props) {
       <button
         type="button"
         onClick={() => router.push(`/dashboard/plays/${playId}/edit`)}
-        className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
-        title="エディタを閉じる"
+        className="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 hover:text-gray-900 transition-colors"
       >
-        <X className="h-4 w-4" />
+        <X className="h-3.5 w-3.5" />
+        閉じる
       </button>
       <span className="text-sm font-medium text-gray-900 truncate">
         {title}
