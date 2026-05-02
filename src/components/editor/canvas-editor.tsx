@@ -159,8 +159,8 @@ function draw(
       ) {
         const cy =
           MARGIN.top + cursor.charIndex * (SPEAKER_FONT_SIZE + 3);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(col.x - FONT_SIZE / 2, cy, FONT_SIZE, 2);
+        ctx.fillStyle = "#1a73e8";
+        ctx.fillRect(col.x - FONT_SIZE / 2 - 1, cy, FONT_SIZE + 2, 3);
       }
     }
 
@@ -193,7 +193,7 @@ function draw(
       ) {
         const cy = BODY_TOP + localIndex * CHAR_H;
         ctx.fillStyle = "#1a73e8";
-        ctx.fillRect(col.x - FONT_SIZE / 2, cy, FONT_SIZE, 2);
+        ctx.fillRect(col.x - FONT_SIZE / 2 - 1, cy, FONT_SIZE + 2, 3);
       }
     }
   }
@@ -292,8 +292,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) / scale;
-      const my = (e.clientY - rect.top) / scale;
+      const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+      const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
 
       // 話者名エリアのクリック
       if (my < SEP_Y) {
@@ -349,7 +349,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       inputRef.current?.focus();
     },
-    [doc, scale]
+    [doc]
   );
 
   // キーボード入力
