@@ -1,7 +1,15 @@
 /**
  * 台本（縦書き）モードのCanvas描画エンジン。
- * 参考: 『骨壷』いちのみや（劇団かたかご）の台本レイアウトを再現。
- * 全ブロックが同一の列フローで流れる。タイトル・登場人物も列として扱う。
+ * B5横向き用紙ベースの固定レイアウト。
+ *
+ * 組版仕様:
+ *   用紙: B5横 (257mm × 182mm)
+ *   文字数: 20字/列
+ *   列数: 20列/ページ
+ *   フォント: 明朝体 12pt
+ *   余白: 上30mm 下25mm 左20mm 右20mm
+ *   話者名: 区切り線の上、最大5文字
+ *   ぶら下げ: なし（全列同じ開始位置）
  */
 import {
   type PlayDocument,
@@ -10,44 +18,36 @@ import {
   DEFAULT_TYPESETTING,
 } from "./play-document";
 
-const MM2PX = 96 / 25.4;
-const PT2PX = 96 / 72;
+// ─── 用紙サイズ（B5横向き、px換算 @144dpi相当でシャープ描画） ───
+const DPI = 144;
+const MM = DPI / 25.4; // 1mm = 5.67px
+const PAGE_W = Math.round(257 * MM); // 1457px
+const PAGE_H = Math.round(182 * MM); // 1033px
 
-export type ColLayout = {
-  blockIndex: number;
-  field: "speaker" | "speech" | "text" | "direction" | "title" | "author";
-  x: number;
-  chars: string;
-  startCharIndex: number;
-  page: number;
-  /** タイトルページの特殊列（タイトル/作者/キャストラベル/キャラ名） */
-  special?: "title" | "author" | "castLabel" | "castChar";
-};
+// ─── 余白 ───
+const M_TOP = Math.round(30 * MM);    // 170px
+const M_BOTTOM = Math.round(25 * MM); // 142px
+const M_LEFT = Math.round(20 * MM);   // 113px
+const M_RIGHT = Math.round(20 * MM);  // 113px
 
-function resolveLayout(cfg: TypesettingConfig, canvasW: number, canvasH: number) {
-  const fontSize = cfg.fontSize * PT2PX;
-  const speakerFontSize = cfg.speakerFontSize * PT2PX;
-  const charH = fontSize + Math.round(fontSize * 0.4);
-  const colW = Math.round(fontSize * 1.5); // 参考PDFに合わせた列幅
-  const marginTop = cfg.marginTop * MM2PX;
-  const marginBottom = cfg.marginBottom * MM2PX;
-  const marginLeft = cfg.marginLeft * MM2PX;
-  const marginRight = cfg.marginRight * MM2PX;
-  const speakerAreaH = speakerFontSize * 2.5 + 8; // 話者名2文字分に短縮
-  const headerH = cfg.showHeader ? 22 : 0;
-  const sepY = marginTop + headerH + speakerAreaH;
-  const bodyTop = sepY + 10;
-  const bodyH = canvasH - marginBottom - bodyTop - (cfg.showPageNumber ? 28 : 0);
-  const maxChars = Math.max(1, Math.floor(bodyH / charH));
-  const maxCols = Math.max(1, Math.floor((canvasW - marginLeft - marginRight) / colW));
+// ─── テキスト設定 ───
+const FONT_SIZE = Math.round(12 * DPI / 72); // 12pt = 24px
+const SPEAKER_FONT_SIZE = Math.round(10 * DPI / 72); // 10pt = 20px
+const COLS_PER_PAGE = 20;
+const CHARS_PER_COL = 20;
 
-  return {
-    fontSize, speakerFontSize, charH, colW,
-    marginTop, marginBottom, marginLeft, marginRight,
-    speakerAreaH, headerH, sepY, bodyTop, bodyH,
-    maxChars, maxCols,
-  };
-}
+// ─── 計算値 ───
+const CONTENT_W = PAGE_W - M_LEFT - M_RIGHT; // 本文エリア幅
+const CONTENT_H = PAGE_H - M_TOP - M_BOTTOM; // 本文エリア高さ
+const COL_W = Math.floor(CONTENT_W / COLS_PER_PAGE); // 列幅
+const SPEAKER_AREA_H = Math.round(SPEAKER_FONT_SIZE * 3 + 8); // 話者名エリア高さ
+const HEADER_H = 18;
+const SEP_Y = M_TOP + HEADER_H + SPEAKER_AREA_H; // 区切り線Y
+const BODY_TOP = SEP_Y + 6; // 本文開始Y
+const BODY_H = PAGE_H - M_BOTTOM - BODY_TOP;
+const CHAR_H = Math.floor(BODY_H / CHARS_PER_COL); // 1文字の送りピッチ
+
+export { PAGE_W, PAGE_H };
 
 function fontStr(size: number, cfg: TypesettingConfig, bold = false) {
   const family = cfg.fontFamily === "gothic"
@@ -56,26 +56,32 @@ function fontStr(size: number, cfg: TypesettingConfig, bold = false) {
   return `${bold ? "bold " : ""}${size}px ${family}`;
 }
 
-/** 列レイアウト計算 — 全ブロックが同一フローで流れる */
-export function computeColumns(
-  doc: PlayDocument,
-  canvasW: number,
-  canvasH: number
-): ColLayout[] {
-  const cfg = doc.typesetting || DEFAULT_TYPESETTING;
-  const L = resolveLayout(cfg, canvasW, canvasH);
+// ─── 列レイアウト ───
+export type ColLayout = {
+  blockIndex: number;
+  field: "speaker" | "speech" | "text" | "direction" | "title" | "author";
+  x: number;
+  chars: string;
+  startCharIndex: number;
+  page: number;
+  special?: "title" | "author" | "castLabel" | "castChar";
+};
+
+/** 列X座標（右端から数えて n 列目） */
+function colX(colIndex: number): number {
+  return PAGE_W - M_RIGHT - COL_W / 2 - colIndex * COL_W;
+}
+
+export function computeColumns(doc: PlayDocument): ColLayout[] {
   const cols: ColLayout[] = [];
-  let x = canvasW - L.marginRight - L.colW / 2;
-  let colsOnPage = 0;
+  let ci = 0; // 列インデックス（0=右端）
   let page = 0;
 
   const nextCol = () => {
-    x -= L.colW;
-    colsOnPage++;
-    if (colsOnPage >= L.maxCols) {
+    ci++;
+    if (ci >= COLS_PER_PAGE) {
       page++;
-      colsOnPage = 0;
-      x = canvasW - L.marginRight - L.colW / 2;
+      ci = 0;
     }
   };
 
@@ -84,260 +90,194 @@ export function computeColumns(
 
     switch (block.type) {
       case "title":
-        // タイトル: 1列
-        cols.push({ blockIndex: bi, field: "title", x, chars: block.title || "", startCharIndex: 0, page, special: "title" });
+        cols.push({ blockIndex: bi, field: "title", x: colX(ci), chars: block.title || "", startCharIndex: 0, page, special: "title" });
         nextCol();
-        // 作者: 1列
-        cols.push({ blockIndex: bi, field: "author", x, chars: block.author || "", startCharIndex: 0, page, special: "author" });
+        cols.push({ blockIndex: bi, field: "author", x: colX(ci), chars: block.author || "", startCharIndex: 0, page, special: "author" });
         nextCol();
         break;
 
       case "castList":
-        // 「登場人物」ラベル: 1列
-        cols.push({ blockIndex: bi, field: "text", x, chars: "登場人物", startCharIndex: 0, page, special: "castLabel" });
+        cols.push({ blockIndex: bi, field: "text", x: colX(ci), chars: "登場人物", startCharIndex: 0, page, special: "castLabel" });
         nextCol();
-        // 各キャラクター名: 各1列
-        for (let ci = 0; ci < block.characters.length; ci++) {
-          cols.push({ blockIndex: bi, field: "text", x, chars: block.characters[ci].name, startCharIndex: ci, page, special: "castChar" });
+        for (let k = 0; k < block.characters.length; k++) {
+          cols.push({ blockIndex: bi, field: "text", x: colX(ci), chars: block.characters[k].name, startCharIndex: k, page, special: "castChar" });
           nextCol();
         }
         break;
 
-      case "setting": {
-        const text = block.text || "";
-        for (let i = 0; i < Math.max(1, text.length); i += L.maxChars) {
-          cols.push({ blockIndex: bi, field: "text", x, chars: text.slice(i, i + L.maxChars), startCharIndex: i, page });
-          nextCol();
-        }
-        break;
-      }
-
-      case "sceneHeading":
-        cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "", startCharIndex: 0, page });
-        nextCol();
-        break;
-
-      case "togaki": {
-        const text = block.text || "";
+      default: {
+        const fieldName = block.type === "serif" ? "speech" : "text";
+        const text = block.type === "serif" ? (block.speech || "") : ((block as any).text || "");
         if (text.length === 0) {
-          cols.push({ blockIndex: bi, field: "text", x, chars: "", startCharIndex: 0, page });
+          cols.push({ blockIndex: bi, field: fieldName as any, x: colX(ci), chars: "", startCharIndex: 0, page });
           nextCol();
         } else {
-          for (let i = 0; i < text.length; i += L.maxChars) {
-            cols.push({ blockIndex: bi, field: "text", x, chars: text.slice(i, i + L.maxChars), startCharIndex: i, page });
+          for (let i = 0; i < text.length; i += CHARS_PER_COL) {
+            cols.push({ blockIndex: bi, field: fieldName as any, x: colX(ci), chars: text.slice(i, i + CHARS_PER_COL), startCharIndex: i, page });
             nextCol();
           }
         }
         break;
       }
-
-      case "serif": {
-        const speech = block.speech || "";
-        if (speech.length === 0) {
-          cols.push({ blockIndex: bi, field: "speech", x, chars: "", startCharIndex: 0, page });
-          nextCol();
-        } else {
-          for (let i = 0; i < speech.length; i += L.maxChars) {
-            cols.push({ blockIndex: bi, field: "speech", x, chars: speech.slice(i, i + L.maxChars), startCharIndex: i, page });
-            nextCol();
-          }
-        }
-        break;
-      }
-
-      case "endMark":
-        cols.push({ blockIndex: bi, field: "text", x, chars: block.text || "おわり", startCharIndex: 0, page });
-        nextCol();
-        break;
     }
   }
-
   return cols;
 }
 
-/** 台本モード描画 */
+// ─── 描画 ───
 export function drawScript(
   ctx: CanvasRenderingContext2D,
   doc: PlayDocument,
   cols: ColLayout[],
   cursor: CursorPosition | null,
-  w: number,
-  h: number,
   currentPage: number
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
-  const L = resolveLayout(cfg, w, h);
-  const bodyFont = fontStr(L.fontSize, cfg);
-  const speakerFont = fontStr(L.speakerFontSize, cfg, true);
+  const bodyFont = fontStr(FONT_SIZE, cfg);
+  const speakerFont = fontStr(SPEAKER_FONT_SIZE, cfg, true);
 
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, PAGE_W, PAGE_H);
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
 
-  // ─── ヘッダー（横書き、左上） ───
+  // ヘッダー
   if (cfg.showHeader) {
     const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
     const headerText = cfg.headerText || (titleBlock ? `『${titleBlock.title}』${titleBlock.author}` : "");
     if (headerText) {
-      ctx.font = fontStr(13, cfg);
-      ctx.fillStyle = "#777";
+      ctx.font = fontStr(11, cfg);
+      ctx.fillStyle = "#888";
       ctx.textBaseline = "top";
-      ctx.fillText(headerText, L.marginLeft, L.marginTop + 2);
+      ctx.fillText(headerText, M_LEFT, M_TOP + 2);
     }
   }
 
-  // ─── 区切り線（話者名エリアとセリフエリアの境界） ───
-  ctx.strokeStyle = "#aaa";
+  // 区切り線
+  ctx.strokeStyle = "#999";
   ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.moveTo(L.marginLeft, L.sepY);
-  ctx.lineTo(w - L.marginRight, L.sepY);
+  ctx.moveTo(M_LEFT, SEP_Y);
+  ctx.lineTo(PAGE_W - M_RIGHT, SEP_Y);
   ctx.stroke();
 
-  // ─── ページ番号 ───
+  // ページ番号
   if (cfg.showPageNumber) {
-    ctx.font = fontStr(12, cfg);
-    ctx.fillStyle = "#999";
+    ctx.font = fontStr(11, cfg);
+    ctx.fillStyle = "#888";
     ctx.textBaseline = "bottom";
-    const pageNum = `${currentPage + 1}`;
-    const pw = ctx.measureText(pageNum).width;
-    ctx.fillText(pageNum, (w - pw) / 2, h - 10);
+    const pn = `${currentPage + 1}`;
+    ctx.fillText(pn, (PAGE_W - ctx.measureText(pn).width) / 2, PAGE_H - M_BOTTOM + 30);
   }
 
   // ─── 列描画 ───
   ctx.textBaseline = "top";
-  let prevBlockIndex = -1;
+  let prevBI = -1;
 
   for (const col of cols) {
     if (col.page !== currentPage) continue;
-
     const block = doc.blocks[col.blockIndex];
     if (!block) continue;
-    const isFirstCol = col.blockIndex !== prevBlockIndex;
-    prevBlockIndex = col.blockIndex;
+    const isFirst = col.blockIndex !== prevBI;
+    prevBI = col.blockIndex;
     const isActive = cursor?.blockIndex === col.blockIndex;
 
     // アクティブ列ハイライト
     if (isActive) {
-      ctx.fillStyle = "rgba(59, 130, 246, 0.06)";
-      ctx.fillRect(col.x - L.colW / 2, L.marginTop + L.headerH, L.colW, h - L.marginTop - L.headerH - L.marginBottom);
+      ctx.fillStyle = "rgba(59,130,246,0.05)";
+      ctx.fillRect(col.x - COL_W / 2, M_TOP + HEADER_H, COL_W, PAGE_H - M_TOP - HEADER_H - M_BOTTOM);
     }
 
-    // ─── 特殊列（タイトルページ要素） ───
+    // ─── 特殊列 ───
     if (col.special === "title") {
-      ctx.font = fontStr(L.fontSize * 1.5, cfg, true);
+      ctx.font = fontStr(FONT_SIZE * 1.6, cfg, true);
       ctx.fillStyle = "#111";
+      const fs = FONT_SIZE * 1.6;
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
         const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + i * (L.fontSize * 1.5 + 8));
+        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + i * (fs + 6));
       }
-      // カーソル
       if (isActive && cursor?.field === "title") {
         ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - L.fontSize * 0.75, L.bodyTop + cursor.charIndex * (L.fontSize * 1.5 + 8), L.fontSize * 1.5 + 2, 3);
+        ctx.fillRect(col.x - fs / 2, BODY_TOP + cursor.charIndex * (fs + 6), fs + 2, 3);
       }
       continue;
     }
-
     if (col.special === "author") {
-      ctx.font = fontStr(L.fontSize * 0.7, cfg);
+      const fs = FONT_SIZE * 0.75;
+      ctx.font = fontStr(fs, cfg);
       ctx.fillStyle = "#555";
-      // 作者名はタイトルより少し下から開始
-      const offsetY = L.fontSize * 2;
+      const offsetY = FONT_SIZE * 2.5;
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
         const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + offsetY + i * (L.fontSize * 0.7 + 4));
+        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + offsetY + i * (fs + 3));
       }
       if (isActive && cursor?.field === "author") {
         ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - L.fontSize * 0.35, L.bodyTop + offsetY + cursor.charIndex * (L.fontSize * 0.7 + 4), L.fontSize * 0.7 + 2, 3);
+        ctx.fillRect(col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * (fs + 3), fs + 2, 3);
       }
       continue;
     }
-
-    if (col.special === "castLabel") {
-      ctx.font = fontStr(L.speakerFontSize, cfg);
-      ctx.fillStyle = "#555";
+    if (col.special === "castLabel" || col.special === "castChar") {
+      const fs = col.special === "castLabel" ? SPEAKER_FONT_SIZE : SPEAKER_FONT_SIZE;
+      ctx.font = fontStr(fs, cfg, col.special === "castLabel");
+      ctx.fillStyle = col.special === "castLabel" ? "#555" : "#333";
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
         const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + i * (L.speakerFontSize + 4));
+        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + i * (fs + 3));
       }
       continue;
     }
 
-    if (col.special === "castChar") {
-      ctx.font = fontStr(L.speakerFontSize, cfg);
-      ctx.fillStyle = "#333";
-      for (let i = 0; i < col.chars.length; i++) {
-        const ch = col.chars[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, L.bodyTop + i * (L.speakerFontSize + 4));
-      }
-      continue;
-    }
-
-    // ─── 話者名（serifの最初の列のみ） ───
-    if (isFirstCol && block.type === "serif") {
+    // ─── 話者名（serif最初の列のみ） ───
+    if (isFirst && block.type === "serif") {
       ctx.font = speakerFont;
       ctx.fillStyle = "#222";
       const speaker = block.speaker || "";
-      // 話者名は区切り線のすぐ上に配置（下揃え）
-      const speakerCharH = L.speakerFontSize + 3;
-      const speakerBottom = L.sepY - 4;
-      const speakerTop = speakerBottom - speaker.length * speakerCharH;
+      const spCharH = SPEAKER_FONT_SIZE + 2;
+      const spBottom = SEP_Y - 3;
+      const spTop = spBottom - speaker.length * spCharH;
       for (let i = 0; i < speaker.length; i++) {
         const ch = speaker[i];
         const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2,
-          speakerTop + i * speakerCharH);
+        ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spTop + i * spCharH);
       }
-
       if (isActive && cursor?.field === "speaker") {
         ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - L.fontSize / 2 - 1,
-          speakerTop + cursor.charIndex * speakerCharH,
-          L.fontSize + 2, 3);
+        ctx.fillRect(col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2, 2);
       }
     }
 
-    // ─── 本文テキスト ───
+    // ─── 本文 ───
     ctx.font = bodyFont;
     ctx.fillStyle = block.type === "togaki" || block.type === "setting" ? "#333" : "#1a1a1a";
-
     for (let i = 0; i < col.chars.length; i++) {
       const ch = col.chars[i];
       const cw = ctx.measureText(ch).width;
-      ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2, L.bodyTop + i * L.charH);
+      ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, BODY_TOP + i * CHAR_H);
     }
 
     // ─── カーソル ───
     if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
-      const localIdx = cursor.charIndex - col.startCharIndex;
-      if (localIdx >= 0 && localIdx <= col.chars.length && (localIdx < L.maxChars || col.chars.length < L.maxChars)) {
+      const li = cursor.charIndex - col.startCharIndex;
+      if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
         ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - L.fontSize / 2 - 1, L.bodyTop + localIdx * L.charH, L.fontSize + 2, 3);
+        ctx.fillRect(col.x - FONT_SIZE / 2 - 1, BODY_TOP + li * CHAR_H, FONT_SIZE + 2, 2);
       }
     }
   }
 }
 
-/** クリック → カーソル位置 */
+// ─── ヒットテスト ───
 export function hitTestScript(
   doc: PlayDocument,
   cols: ColLayout[],
   mx: number,
   my: number,
-  w: number,
-  h: number,
   currentPage: number
 ): CursorPosition | null {
-  const cfg = doc.typesetting || DEFAULT_TYPESETTING;
-  const L = resolveLayout(cfg, w, h);
-
-  // 最も近い列を見つける
   let bestCol: ColLayout | null = null;
   let bestDist = Infinity;
   for (const col of cols) {
@@ -350,47 +290,25 @@ export function hitTestScript(
   const block = doc.blocks[bestCol.blockIndex];
   if (!block) return null;
 
-  // 特殊列
-  if (bestCol.special === "title") {
-    return { blockIndex: bestCol.blockIndex, field: "title", charIndex: bestCol.chars.length };
-  }
-  if (bestCol.special === "author") {
-    return { blockIndex: bestCol.blockIndex, field: "author", charIndex: bestCol.chars.length };
-  }
-  if (bestCol.special === "castLabel" || bestCol.special === "castChar") {
-    return null; // キャストリストは直接編集不可（後で専用UI）
-  }
+  if (bestCol.special === "title") return { blockIndex: bestCol.blockIndex, field: "title", charIndex: bestCol.chars.length };
+  if (bestCol.special === "author") return { blockIndex: bestCol.blockIndex, field: "author", charIndex: bestCol.chars.length };
+  if (bestCol.special === "castLabel" || bestCol.special === "castChar") return null;
 
-  // 話者名エリア
-  if (my < L.sepY && block.type === "serif") {
+  if (my < SEP_Y && block.type === "serif") {
     const speaker = block.speaker || "";
-    const speakerCharH = L.speakerFontSize + 3;
-    const speakerBottom = L.sepY - 4;
-    const speakerTop = speakerBottom - speaker.length * speakerCharH;
-    const charIdx = Math.min(
-      Math.floor((my - speakerTop) / speakerCharH),
-      speaker.length
-    );
-    return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, charIdx) };
+    const spCharH = SPEAKER_FONT_SIZE + 2;
+    const spBottom = SEP_Y - 3;
+    const spTop = spBottom - speaker.length * spCharH;
+    const idx = Math.min(Math.floor((my - spTop) / spCharH), speaker.length);
+    return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, idx) };
   }
 
-  // セリフ/テキストエリア
-  const charInCol = Math.min(
-    Math.floor((my - L.bodyTop) / L.charH),
-    bestCol.chars.length
-  );
-  return {
-    blockIndex: bestCol.blockIndex,
-    field: bestCol.field as "speech" | "text",
-    charIndex: bestCol.startCharIndex + Math.max(0, charInCol),
-  };
+  const li = Math.min(Math.floor((my - BODY_TOP) / CHAR_H), bestCol.chars.length);
+  return { blockIndex: bestCol.blockIndex, field: bestCol.field as any, charIndex: bestCol.startCharIndex + Math.max(0, li) };
 }
 
-/** 最大ページ数 */
 export function getMaxPage(cols: ColLayout[]): number {
   let max = 0;
-  for (const col of cols) {
-    if (col.page > max) max = col.page;
-  }
+  for (const col of cols) { if (col.page > max) max = col.page; }
   return max;
 }

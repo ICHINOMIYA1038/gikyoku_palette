@@ -16,6 +16,8 @@ import {
   drawScript,
   hitTestScript,
   getMaxPage,
+  PAGE_W,
+  PAGE_H,
 } from "@/lib/editor/draw-script";
 import { drawHorizontal, hitTestHorizontal } from "@/lib/editor/draw-horizontal";
 import { savePlayBody } from "@/actions/plays";
@@ -42,7 +44,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
   const colsRef = useRef<ColLayout[]>([]);
   const historyRef = useRef<PlayDocument[]>([]);
 
@@ -102,7 +103,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [cursor.blockIndex, pushHistory, updateDoc]
   );
 
-  // コンテナサイズ
+  // コンテナサイズ（横書きモード用 + スケーリング計算用）
+  const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -110,12 +112,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       for (const entry of entries) {
         const w = Math.floor(entry.contentRect.width);
         const h = Math.floor(entry.contentRect.height);
-        if (w > 0 && h > 0) setCanvasSize({ w, h });
+        if (w > 0 && h > 0) setContainerSize({ w, h });
       }
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // 台本モードのスケーリング
+  const scriptScale = Math.min(
+    (containerSize.w - 32) / PAGE_W,
+    (containerSize.h - 16) / PAGE_H,
+    1 // 1倍以上にはしない
+  );
 
   // 描画
   const redraw = useCallback(() => {
@@ -123,19 +132,20 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { w, h } = canvasSize;
-    canvas.width = w;
-    canvas.height = h;
 
     if (mode === "script") {
-      const cols = computeColumns(doc, w, h);
+      canvas.width = PAGE_W;
+      canvas.height = PAGE_H;
+      const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, w, h, currentPage);
+      drawScript(ctx, doc, cols, cursor, currentPage);
     } else {
+      canvas.width = containerSize.w;
+      canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, w, h);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h);
     }
-  }, [doc, cursor, canvasSize, mode, currentPage]);
+  }, [doc, cursor, containerSize, mode, currentPage]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
@@ -165,19 +175,21 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (canvasSize.w / rect.width);
-      const my = (e.clientY - rect.top) * (canvasSize.h / rect.height);
+      const cw = mode === "script" ? PAGE_W : containerSize.w;
+      const ch = mode === "script" ? PAGE_H : containerSize.h;
+      const mx = (e.clientX - rect.left) * (cw / rect.width);
+      const my = (e.clientY - rect.top) * (ch / rect.height);
 
       let newCursor: CursorPosition | null;
       if (mode === "script") {
-        newCursor = hitTestScript(doc, colsRef.current, mx, my, canvasSize.w, canvasSize.h, currentPage);
+        newCursor = hitTestScript(doc, colsRef.current, mx, my, currentPage);
       } else {
         newCursor = hitTestHorizontal(doc, mx, my);
       }
       if (newCursor) setCursor(newCursor);
       inputRef.current?.focus();
     },
-    [doc, canvasSize, mode, currentPage]
+    [doc, containerSize, mode, currentPage]
   );
 
   // キーボード
@@ -345,9 +357,18 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       </div>
 
       {/* Canvas */}
-      <div ref={containerRef} className="relative flex-1 bg-gray-50">
-        <canvas ref={canvasRef} onClick={handleClick} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
-        <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+      <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
+        {mode === "script" ? (
+          <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
+            <canvas ref={canvasRef} onClick={handleClick} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
+            <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+          </div>
+        ) : (
+          <>
+            <canvas ref={canvasRef} onClick={handleClick} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
+            <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+          </>
+        )}
       </div>
     </div>
   );
