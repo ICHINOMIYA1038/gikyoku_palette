@@ -23,6 +23,7 @@ model PalettePlay {
   synopsis        String
   body            String?
   bodyPdfUrl      String?   @map("body_pdf_url")
+  bodyJson        Json?     @map("body_json")
   bodyType        String    @default("text") @map("body_type")
   bodyOrientation String    @default("portrait") @map("body_orientation")
   /// 読む方向。'ltr' = 左から右（横書き）, 'rtl' = 右から左（縦書き戯曲）

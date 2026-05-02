@@ -121,10 +121,10 @@ export async function getPlayById(id: string) {
 }
 
 export async function incrementViewCount(id: string) {
-  await prisma.palettePlay.update({
-    where: { id },
-    data: { viewCount: { increment: 1 } },
-  });
+  await prisma.$executeRaw`
+    UPDATE palette.palette_plays
+    SET view_count = view_count + 1
+    WHERE id = ${id}`;
 }
 
 export async function getGenres() {
@@ -195,7 +195,7 @@ const playSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください").max(200),
   synopsis: z.string().min(1, "あらすじを入力してください"),
   body: z.string().max(500000, "本文は50万文字以内にしてください").optional().default(""),
-  bodyType: z.enum(["text", "pdf"]).default("text"),
+  bodyType: z.enum(["text", "pdf", "editor"]).default("text"),
   bodyPdfUrl: uploadedUrl.optional().or(z.literal("")),
   bodyOrientation: z.enum(["portrait", "landscape"]).default("portrait"),
   readingDirection: z.enum(["ltr", "rtl"]).default("ltr"),
@@ -354,4 +354,42 @@ export async function createPlay(formData: FormData) {
 
   revalidatePath("/dashboard/plays");
   return { success: true, id: play.id };
+}
+
+/**
+ * エディタの自動保存用。bodyJson を更新し、プレーンテキストも body に同期する。
+ */
+export async function savePlayBody(
+  playId: string,
+  bodyJson: Record<string, unknown>
+) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "認証が必要です" };
+
+  const play = await prisma.palettePlay.findUnique({
+    where: { id: playId },
+    select: { authorId: true },
+  });
+  if (!play || play.authorId !== session.user.id) {
+    return { error: "権限がありません" };
+  }
+
+  // bodyJson からプレーンテキストを抽出して body にも保存（検索用）
+  const { extractTextFromJson } = await import(
+    "@/lib/editor/helpers/extract-text"
+  );
+  const plainText = extractTextFromJson(
+    bodyJson as Parameters<typeof extractTextFromJson>[0]
+  );
+
+  await prisma.palettePlay.update({
+    where: { id: playId },
+    data: {
+      bodyJson: bodyJson as any,
+      body: plainText,
+      bodyType: "editor",
+    },
+  });
+
+  return { success: true };
 }
