@@ -129,9 +129,9 @@ export function BlockPanel({
       </div>
 
       {/* ブロック一覧 */}
-      <div className="p-3 flex-1">
+      <div className="p-3 flex-1 min-h-0">
         <p className="text-gray-400 mb-1.5">ブロック一覧</p>
-        <div className="space-y-0.5 max-h-60 overflow-y-auto">
+        <div className="space-y-0.5 overflow-y-auto" style={{ maxHeight: "calc(100% - 20px)" }}>
           {doc.blocks.map((b, i) => (
             <div
               key={i}

@@ -286,8 +286,12 @@ export function hitTestHorizontal(
 
     if (my >= y && my < y + rowH) {
       switch (block.type) {
-        case "title":
-          return { blockIndex: bi, field: mx < 400 ? "title" : "author", charIndex: mx < 400 ? block.title.length : block.author.length };
+        case "title": {
+          // タイトル幅を動的に計算
+          const titleEnd = H_MARGIN.left + (block.title || "").length * 24 + 24;
+          const isTitle = mx < titleEnd;
+          return { blockIndex: bi, field: isTitle ? "title" : "author", charIndex: isTitle ? block.title.length : block.author.length };
+        }
         case "serif":
           if (mx < H_SEP_X) return { blockIndex: bi, field: "speaker", charIndex: block.speaker.length };
           return { blockIndex: bi, field: "speech", charIndex: block.speech.length };
