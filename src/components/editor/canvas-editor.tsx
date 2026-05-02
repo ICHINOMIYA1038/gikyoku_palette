@@ -12,22 +12,25 @@ import {
 } from "@/lib/editor/play-document";
 import { savePlayBody } from "@/actions/plays";
 
-// ─── レイアウト定数（A4横向き台本形式） ───
-const PAGE_W = 1060; // A4横 (px at ~96dpi scale)
-const PAGE_H = 720;
-const MARGIN = { top: 30, bottom: 30, left: 40, right: 40 };
-const FONT_SIZE = 18;
-const SPEAKER_FONT_SIZE = 15;
-const CHAR_H = FONT_SIZE + 6; // 文字送りピッチ（縦方向）
-const COL_W = FONT_SIZE + 12; // 列幅
-const SPEAKER_AREA_H = SPEAKER_FONT_SIZE * 4 + 10; // 話者名エリア高さ
-const SEP_Y = MARGIN.top + SPEAKER_AREA_H; // 区切り線Y
-const BODY_TOP = SEP_Y + 8; // セリフ開始Y
-const BODY_H = PAGE_H - MARGIN.bottom - BODY_TOP; // セリフエリア高さ
-const MAX_CHARS_PER_COL = Math.floor(BODY_H / CHAR_H); // 1列あたり最大文字数
+// ─── レイアウト定数（ビューポート適応・台本形式） ───
+const FONT_SIZE = 24;
+const SPEAKER_FONT_SIZE = 18;
+const CHAR_H = FONT_SIZE + 8; // 文字送りピッチ（縦方向）
+const COL_W = FONT_SIZE + 16; // 列幅
+const MARGIN = { top: 20, bottom: 20, left: 30, right: 30 };
+const SPEAKER_AREA_H = SPEAKER_FONT_SIZE * 4 + 16; // 話者名エリア高さ
 
 const BODY_FONT = `${FONT_SIZE}px "Noto Serif JP", "游明朝", serif`;
 const SPEAKER_FONT = `bold ${SPEAKER_FONT_SIZE}px "Noto Serif JP", "游明朝", serif`;
+
+// 動的に計算される値（Canvasサイズに依存）
+function computeLayout(canvasH: number) {
+  const SEP_Y = MARGIN.top + SPEAKER_AREA_H;
+  const BODY_TOP = SEP_Y + 10;
+  const BODY_H = canvasH - MARGIN.bottom - BODY_TOP;
+  const MAX_CHARS = Math.floor(BODY_H / CHAR_H);
+  return { SEP_Y, BODY_TOP, BODY_H, MAX_CHARS };
+}
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -45,58 +48,33 @@ type ColLayout = {
   startCharIndex: number; // 元テキスト中の開始位置
 };
 
-function computeColumns(doc: PlayDocument): ColLayout[] {
+function computeColumns(doc: PlayDocument, canvasW: number, canvasH: number): ColLayout[] {
+  const { MAX_CHARS } = computeLayout(canvasH);
   const cols: ColLayout[] = [];
-  let x = PAGE_W - MARGIN.right - COL_W / 2; // 右端から開始
+  let x = canvasW - MARGIN.right - COL_W / 2; // 右端から開始
 
   for (let bi = 0; bi < doc.blocks.length; bi++) {
     const block = doc.blocks[bi];
 
     if (block.type === "serif") {
-      // セリフのテキストを列に分割
       const speech = block.speech || "";
       if (speech.length === 0) {
-        // 空でも1列確保
-        cols.push({
-          blockIndex: bi,
-          field: "speech",
-          x,
-          chars: "",
-          startCharIndex: 0,
-        });
+        cols.push({ blockIndex: bi, field: "speech", x, chars: "", startCharIndex: 0 });
         x -= COL_W;
       } else {
-        for (let i = 0; i < speech.length; i += MAX_CHARS_PER_COL) {
-          cols.push({
-            blockIndex: bi,
-            field: "speech",
-            x,
-            chars: speech.slice(i, i + MAX_CHARS_PER_COL),
-            startCharIndex: i,
-          });
+        for (let i = 0; i < speech.length; i += MAX_CHARS) {
+          cols.push({ blockIndex: bi, field: "speech", x, chars: speech.slice(i, i + MAX_CHARS), startCharIndex: i });
           x -= COL_W;
         }
       }
     } else {
       const text = (block as any).text || "";
       if (text.length === 0) {
-        cols.push({
-          blockIndex: bi,
-          field: "text",
-          x,
-          chars: "",
-          startCharIndex: 0,
-        });
+        cols.push({ blockIndex: bi, field: "text", x, chars: "", startCharIndex: 0 });
         x -= COL_W;
       } else {
-        for (let i = 0; i < text.length; i += MAX_CHARS_PER_COL) {
-          cols.push({
-            blockIndex: bi,
-            field: "text",
-            x,
-            chars: text.slice(i, i + MAX_CHARS_PER_COL),
-            startCharIndex: i,
-          });
+        for (let i = 0; i < text.length; i += MAX_CHARS) {
+          cols.push({ blockIndex: bi, field: "text", x, chars: text.slice(i, i + MAX_CHARS), startCharIndex: i });
           x -= COL_W;
         }
       }
@@ -111,20 +89,24 @@ function draw(
   ctx: CanvasRenderingContext2D,
   doc: PlayDocument,
   cols: ColLayout[],
-  cursor: CursorPosition | null
+  cursor: CursorPosition | null,
+  w: number,
+  h: number
 ) {
-  ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+  const { SEP_Y, BODY_TOP, MAX_CHARS } = computeLayout(h);
+
+  ctx.clearRect(0, 0, w, h);
 
   // 背景
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+  ctx.fillRect(0, 0, w, h);
 
   // 区切り線
-  ctx.strokeStyle = "#999";
-  ctx.lineWidth = 0.5;
+  ctx.strokeStyle = "#bbb";
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(MARGIN.left, SEP_Y);
-  ctx.lineTo(PAGE_W - MARGIN.right, SEP_Y);
+  ctx.lineTo(w - MARGIN.right, SEP_Y);
   ctx.stroke();
 
   ctx.textBaseline = "top";
@@ -147,7 +129,7 @@ function draw(
         ctx.fillText(
           speaker[i],
           col.x - FONT_SIZE / 2 + offsetX,
-          MARGIN.top + i * (SPEAKER_FONT_SIZE + 3)
+          MARGIN.top + i * (SPEAKER_FONT_SIZE + 4)
         );
       }
 
@@ -157,8 +139,7 @@ function draw(
         cursor.blockIndex === col.blockIndex &&
         cursor.field === "speaker"
       ) {
-        const cy =
-          MARGIN.top + cursor.charIndex * (SPEAKER_FONT_SIZE + 3);
+        const cy = MARGIN.top + cursor.charIndex * (SPEAKER_FONT_SIZE + 4);
         ctx.fillStyle = "#1a73e8";
         ctx.fillRect(col.x - FONT_SIZE / 2 - 1, cy, FONT_SIZE + 2, 3);
       }
@@ -172,11 +153,7 @@ function draw(
       const ch = col.chars[i];
       const charW = ctx.measureText(ch).width;
       const offsetX = (FONT_SIZE - charW) / 2;
-      ctx.fillText(
-        ch,
-        col.x - FONT_SIZE / 2 + offsetX,
-        BODY_TOP + i * CHAR_H
-      );
+      ctx.fillText(ch, col.x - FONT_SIZE / 2 + offsetX, BODY_TOP + i * CHAR_H);
     }
 
     // セリフカーソル
@@ -186,18 +163,13 @@ function draw(
       (cursor.field === "speech" || cursor.field === "text")
     ) {
       const localIndex = cursor.charIndex - col.startCharIndex;
-      if (
-        localIndex >= 0 &&
-        localIndex <= col.chars.length &&
-        (localIndex < MAX_CHARS_PER_COL || col.chars.length < MAX_CHARS_PER_COL)
-      ) {
+      if (localIndex >= 0 && localIndex <= col.chars.length && (localIndex < MAX_CHARS || col.chars.length < MAX_CHARS)) {
         const cy = BODY_TOP + localIndex * CHAR_H;
         ctx.fillStyle = "#1a73e8";
         ctx.fillRect(col.x - FONT_SIZE / 2 - 1, cy, FONT_SIZE + 2, 3);
       }
     }
   }
-
 }
 
 // ─── メインコンポーネント ───
@@ -215,9 +187,24 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
 
   const colsRef = useRef<ColLayout[]>([]);
+
+  // コンテナサイズ監視
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = Math.floor(entry.contentRect.width);
+        const h = Math.floor(entry.contentRect.height);
+        if (w > 0 && h > 0) setCanvasSize({ w, h });
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // 描画
   const redraw = useCallback(() => {
@@ -225,16 +212,13 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    canvas.width = PAGE_W;
-    canvas.height = PAGE_H;
-    const cols = computeColumns(doc);
+    const { w, h } = canvasSize;
+    canvas.width = w;
+    canvas.height = h;
+    const cols = computeColumns(doc, w, h);
     colsRef.current = cols;
-    console.log("[CanvasEditor] redraw", { blocks: doc.blocks.length, cols: cols.length, cursor });
-    if (cols.length > 0) {
-      console.log("[CanvasEditor] first col", cols[0]);
-    }
-    draw(ctx, doc, cols, cursor);
-  }, [doc, cursor]);
+    draw(ctx, doc, cols, cursor, w, h);
+  }, [doc, cursor, canvasSize]);
 
   useEffect(() => {
     redraw();
@@ -292,10 +276,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
-      const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
+      const mx = (e.clientX - rect.left) * (canvasSize.w / rect.width);
+      const my = (e.clientY - rect.top) * (canvasSize.h / rect.height);
 
       // 話者名エリアのクリック
+      const { SEP_Y, BODY_TOP, MAX_CHARS } = computeLayout(canvasSize.h);
       if (my < SEP_Y) {
         // 最も近い列を見つける
         let bestCol: ColLayout | null = null;
@@ -349,7 +334,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       inputRef.current?.focus();
     },
-    [doc]
+    [doc, canvasSize]
   );
 
   // キーボード入力
@@ -525,44 +510,22 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     error: "保存エラー",
   };
 
-  // コンテナ幅に合わせてCanvasをスケーリング
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const availableW = entry.contentRect.width - 32; // padding分
-        const s = Math.min(1, availableW / PAGE_W);
-        setScale(s);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <div ref={containerRef} className="flex flex-col items-center h-full bg-gray-100 overflow-auto p-4">
-      <div className="mb-2 flex items-center gap-4 text-xs text-gray-500">
-        <span>台本エディタ（A4横・縦書き）</span>
+    <div className="flex flex-col h-full bg-gray-50">
+      <div className="flex items-center gap-4 px-4 py-1 text-xs text-gray-400">
+        <span>台本エディタ</span>
         {saveStatus !== "idle" && (
           <span className={saveStatus === "error" ? "text-red-500" : ""}>
             {statusLabels[saveStatus]}
           </span>
         )}
       </div>
-      <div
-        className="relative shadow-lg origin-top"
-        style={{
-          width: PAGE_W,
-          height: PAGE_H,
-          transform: `scale(${scale})`,
-        }}
-      >
+      <div ref={containerRef} className="relative flex-1">
         <canvas
           ref={canvasRef}
           onClick={handleClick}
-          className="cursor-text border border-gray-300 bg-white"
-          style={{ width: PAGE_W, height: PAGE_H }}
+          className="absolute inset-0 cursor-text"
+          style={{ width: "100%", height: "100%" }}
         />
         <textarea
           ref={inputRef}
