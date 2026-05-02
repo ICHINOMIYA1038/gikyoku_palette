@@ -67,21 +67,31 @@ export type ColLayout = {
   special?: "title" | "author" | "castLabel" | "castChar";
 };
 
-/** 列X座標（右端から数えて n 列目） */
-function colX(colIndex: number): number {
-  return PAGE_W - M_RIGHT - COL_W / 2 - colIndex * COL_W;
+// ト書きフォントサイズ（本文より小さい）
+const TOGAKI_FONT_SIZE = Math.round(10 * DPI / 72); // 10pt = 20px
+// ト書きの字下げ（上からN文字分空ける）
+const TOGAKI_INDENT_CHARS = 1;
+// 登場人物の列幅（通常列の半分、きゅっと寄せる）
+const CAST_COL_W = Math.round(COL_W * 0.55);
+
+/** 列X座標（右端から数えて n 列目、pixelオフセット付き） */
+function colX(pixelOffset: number): number {
+  return PAGE_W - M_RIGHT - COL_W / 2 - pixelOffset;
 }
 
 export function computeColumns(doc: PlayDocument): ColLayout[] {
   const cols: ColLayout[] = [];
-  let ci = 0; // 列インデックス（0=右端）
+  let px = 0; // 右端からのピクセルオフセット
   let page = 0;
+  let colsOnPage = 0;
 
-  const nextCol = () => {
-    ci++;
-    if (ci >= COLS_PER_PAGE) {
+  const advanceCol = (width: number = COL_W) => {
+    px += width;
+    colsOnPage++;
+    if (colsOnPage >= COLS_PER_PAGE) {
       page++;
-      ci = 0;
+      colsOnPage = 0;
+      px = 0;
     }
   };
 
@@ -90,31 +100,51 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
 
     switch (block.type) {
       case "title":
-        cols.push({ blockIndex: bi, field: "title", x: colX(ci), chars: block.title || "", startCharIndex: 0, page, special: "title" });
-        nextCol();
-        cols.push({ blockIndex: bi, field: "author", x: colX(ci), chars: block.author || "", startCharIndex: 0, page, special: "author" });
-        nextCol();
+        // タイトル: 通常列幅
+        cols.push({ blockIndex: bi, field: "title", x: colX(px), chars: block.title || "", startCharIndex: 0, page, special: "title" });
+        advanceCol();
+        // 作者: 通常列幅、ページ下部に配置（描画時にオフセット）
+        cols.push({ blockIndex: bi, field: "author", x: colX(px), chars: block.author || "", startCharIndex: 0, page, special: "author" });
+        advanceCol();
         break;
 
       case "castList":
-        cols.push({ blockIndex: bi, field: "text", x: colX(ci), chars: "登場人物", startCharIndex: 0, page, special: "castLabel" });
-        nextCol();
+        // 「登場人物」ラベル: 狭い列幅
+        cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: "登場人物", startCharIndex: 0, page, special: "castLabel" });
+        advanceCol(CAST_COL_W);
+        // 各キャラクター: 狭い列幅で寄せる
         for (let k = 0; k < block.characters.length; k++) {
-          cols.push({ blockIndex: bi, field: "text", x: colX(ci), chars: block.characters[k].name, startCharIndex: k, page, special: "castChar" });
-          nextCol();
+          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: block.characters[k].name, startCharIndex: k, page, special: "castChar" });
+          advanceCol(CAST_COL_W);
         }
         break;
+
+      case "togaki": {
+        // ト書き: 通常列幅だが小さいフォント → 1列に入る文字数が多い
+        const togakiCharsPerCol = Math.floor(BODY_H / (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)));
+        const text = block.text || "";
+        if (text.length === 0) {
+          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: "", startCharIndex: 0, page });
+          advanceCol();
+        } else {
+          for (let i = 0; i < text.length; i += togakiCharsPerCol) {
+            cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: text.slice(i, i + togakiCharsPerCol), startCharIndex: i, page });
+            advanceCol();
+          }
+        }
+        break;
+      }
 
       default: {
         const fieldName = block.type === "serif" ? "speech" : "text";
         const text = block.type === "serif" ? (block.speech || "") : ((block as any).text || "");
         if (text.length === 0) {
-          cols.push({ blockIndex: bi, field: fieldName as any, x: colX(ci), chars: "", startCharIndex: 0, page });
-          nextCol();
+          cols.push({ blockIndex: bi, field: fieldName as any, x: colX(px), chars: "", startCharIndex: 0, page });
+          advanceCol();
         } else {
           for (let i = 0; i < text.length; i += CHARS_PER_COL) {
-            cols.push({ blockIndex: bi, field: fieldName as any, x: colX(ci), chars: text.slice(i, i + CHARS_PER_COL), startCharIndex: i, page });
-            nextCol();
+            cols.push({ blockIndex: bi, field: fieldName as any, x: colX(px), chars: text.slice(i, i + CHARS_PER_COL), startCharIndex: i, page });
+            advanceCol();
           }
         }
         break;
@@ -204,18 +234,20 @@ export function drawScript(
       continue;
     }
     if (col.special === "author") {
-      const fs = FONT_SIZE * 0.75;
+      const fs = FONT_SIZE * 0.65;
+      const lineH = fs + 3;
       ctx.font = fontStr(fs, cfg);
       ctx.fillStyle = "#555";
-      const offsetY = FONT_SIZE * 2.5;
+      // 作者名はページ下半分から開始（参考PDFに合わせる）
+      const offsetY = BODY_H * 0.45;
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
         const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + offsetY + i * (fs + 3));
+        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + offsetY + i * lineH);
       }
       if (isActive && cursor?.field === "author") {
         ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * (fs + 3), fs + 2, 3);
+        ctx.fillRect(col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * lineH, fs + 2, 3);
       }
       continue;
     }
@@ -251,20 +283,42 @@ export function drawScript(
     }
 
     // ─── 本文 ───
-    ctx.font = bodyFont;
-    ctx.fillStyle = block.type === "togaki" || block.type === "setting" ? "#333" : "#1a1a1a";
-    for (let i = 0; i < col.chars.length; i++) {
-      const ch = col.chars[i];
-      const cw = ctx.measureText(ch).width;
-      ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, BODY_TOP + i * CHAR_H);
-    }
-
-    // ─── カーソル ───
-    if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
-      const li = cursor.charIndex - col.startCharIndex;
-      if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
-        ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - FONT_SIZE / 2 - 1, BODY_TOP + li * CHAR_H, FONT_SIZE + 2, 2);
+    if (block.type === "togaki" || block.type === "setting") {
+      // ト書き: 小さいフォント + 字下げ（中央寄せ的配置）
+      const tfs = TOGAKI_FONT_SIZE;
+      const tCharH = tfs + Math.round(tfs * 0.35);
+      const indent = TOGAKI_INDENT_CHARS * CHAR_H; // 上から1文字分空ける
+      ctx.font = fontStr(tfs, cfg);
+      ctx.fillStyle = "#333";
+      for (let i = 0; i < col.chars.length; i++) {
+        const ch = col.chars[i];
+        const cw = ctx.measureText(ch).width;
+        ctx.fillText(ch, col.x - tfs / 2 + (tfs - cw) / 2, BODY_TOP + indent + i * tCharH);
+      }
+      // カーソル
+      if (isActive && cursor?.field === "text") {
+        const li = cursor.charIndex - col.startCharIndex;
+        if (li >= 0 && li <= col.chars.length) {
+          ctx.fillStyle = "#3b82f6";
+          ctx.fillRect(col.x - tfs / 2 - 1, BODY_TOP + indent + li * tCharH, tfs + 2, 2);
+        }
+      }
+    } else {
+      // セリフ / その他: 通常フォント、字下げなし
+      ctx.font = bodyFont;
+      ctx.fillStyle = "#1a1a1a";
+      for (let i = 0; i < col.chars.length; i++) {
+        const ch = col.chars[i];
+        const cw = ctx.measureText(ch).width;
+        ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, BODY_TOP + i * CHAR_H);
+      }
+      // カーソル
+      if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
+        const li = cursor.charIndex - col.startCharIndex;
+        if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
+          ctx.fillStyle = "#3b82f6";
+          ctx.fillRect(col.x - FONT_SIZE / 2 - 1, BODY_TOP + li * CHAR_H, FONT_SIZE + 2, 2);
+        }
       }
     }
   }
@@ -303,7 +357,11 @@ export function hitTestScript(
     return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, idx) };
   }
 
-  const li = Math.min(Math.floor((my - BODY_TOP) / CHAR_H), bestCol.chars.length);
+  // ト書きはインデントとフォントサイズが異なる
+  const isTg = block.type === "togaki" || block.type === "setting";
+  const tCharH = isTg ? (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)) : CHAR_H;
+  const tIndent = isTg ? TOGAKI_INDENT_CHARS * CHAR_H : 0;
+  const li = Math.min(Math.floor((my - BODY_TOP - tIndent) / tCharH), bestCol.chars.length);
   return { blockIndex: bestCol.blockIndex, field: bestCol.field as any, charIndex: bestCol.startCharIndex + Math.max(0, li) };
 }
 
