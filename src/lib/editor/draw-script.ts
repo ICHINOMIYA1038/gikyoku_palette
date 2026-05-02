@@ -27,14 +27,14 @@ export type ColLayout = {
 function resolveLayout(cfg: TypesettingConfig, canvasW: number, canvasH: number) {
   const fontSize = cfg.fontSize * PT2PX;
   const speakerFontSize = cfg.speakerFontSize * PT2PX;
-  const charH = fontSize + Math.round(fontSize * 0.35);
-  const colW = fontSize + Math.round(fontSize * 0.85);
+  const charH = fontSize + Math.round(fontSize * 0.4);
+  const colW = Math.round(fontSize * 1.5); // 参考PDFに合わせた列幅
   const marginTop = cfg.marginTop * MM2PX;
   const marginBottom = cfg.marginBottom * MM2PX;
   const marginLeft = cfg.marginLeft * MM2PX;
   const marginRight = cfg.marginRight * MM2PX;
-  const speakerAreaH = speakerFontSize * 4 + 16;
-  const headerH = cfg.showHeader ? 24 : 0;
+  const speakerAreaH = speakerFontSize * 2.5 + 8; // 話者名2文字分に短縮
+  const headerH = cfg.showHeader ? 22 : 0;
   const sepY = marginTop + headerH + speakerAreaH;
   const bodyTop = sepY + 10;
   const bodyH = canvasH - marginBottom - bodyTop - (cfg.showPageNumber ? 28 : 0);
@@ -284,29 +284,21 @@ export function drawScript(
       ctx.font = speakerFont;
       ctx.fillStyle = "#222";
       const speaker = block.speaker || "";
+      // 話者名は区切り線のすぐ上に配置（下揃え）
+      const speakerCharH = L.speakerFontSize + 3;
+      const speakerBottom = L.sepY - 4;
+      const speakerTop = speakerBottom - speaker.length * speakerCharH;
       for (let i = 0; i < speaker.length; i++) {
         const ch = speaker[i];
         const cw = ctx.measureText(ch).width;
         ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2,
-          L.marginTop + L.headerH + 4 + i * (L.speakerFontSize + 5));
-      }
-
-      if ((block as any).direction) {
-        ctx.font = fontStr(L.speakerFontSize * 0.8, cfg);
-        ctx.fillStyle = "#999";
-        const dir = `（${(block as any).direction}）`;
-        const dirY = L.marginTop + L.headerH + 4 + speaker.length * (L.speakerFontSize + 5) + 4;
-        for (let i = 0; i < dir.length; i++) {
-          const ch = dir[i];
-          const cw = ctx.measureText(ch).width;
-          ctx.fillText(ch, col.x - L.fontSize / 2 + (L.fontSize - cw) / 2, dirY + i * (L.speakerFontSize * 0.8 + 2));
-        }
+          speakerTop + i * speakerCharH);
       }
 
       if (isActive && cursor?.field === "speaker") {
         ctx.fillStyle = "#3b82f6";
         ctx.fillRect(col.x - L.fontSize / 2 - 1,
-          L.marginTop + L.headerH + 4 + cursor.charIndex * (L.speakerFontSize + 5),
+          speakerTop + cursor.charIndex * speakerCharH,
           L.fontSize + 2, 3);
       }
     }
@@ -372,8 +364,11 @@ export function hitTestScript(
   // 話者名エリア
   if (my < L.sepY && block.type === "serif") {
     const speaker = block.speaker || "";
+    const speakerCharH = L.speakerFontSize + 3;
+    const speakerBottom = L.sepY - 4;
+    const speakerTop = speakerBottom - speaker.length * speakerCharH;
     const charIdx = Math.min(
-      Math.floor((my - L.marginTop - L.headerH - 4) / (L.speakerFontSize + 5)),
+      Math.floor((my - speakerTop) / speakerCharH),
       speaker.length
     );
     return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, charIdx) };
