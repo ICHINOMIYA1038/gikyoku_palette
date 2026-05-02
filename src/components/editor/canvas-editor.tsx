@@ -8,8 +8,8 @@ import {
   EMPTY_DOC,
   fromBodyJson,
   toBodyJson,
-  blockLabel,
 } from "@/lib/editor/play-document";
+import { BlockPanel } from "./block-panel";
 import {
   type ColLayout,
   computeColumns,
@@ -42,6 +42,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const [mode, setMode] = useState<EditorMode>("script");
   const [currentPage, setCurrentPage] = useState(0);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [showPanel, setShowPanel] = useState(true);
+  const [cursorVisible, setCursorVisible] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<ColLayout[]>([]);
@@ -86,6 +88,57 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       setCursor((c) => ({ ...c, blockIndex: Math.min(c.blockIndex, prev.blocks.length - 1) }));
     }
   }, [scheduleSave]);
+
+  // ブロック移動
+  const moveBlock = useCallback(
+    (fromIndex: number, direction: "up" | "down") => {
+      const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
+      if (toIndex < 0 || toIndex >= doc.blocks.length) return;
+      pushHistory();
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        [nb[fromIndex], nb[toIndex]] = [nb[toIndex], nb[fromIndex]];
+        return { ...d, blocks: nb };
+      });
+      setCursor((c) => ({ ...c, blockIndex: toIndex }));
+    },
+    [doc.blocks.length, pushHistory, updateDoc]
+  );
+
+  // ブロック削除
+  const deleteBlock = useCallback(
+    (index: number) => {
+      if (doc.blocks.length <= 1) return;
+      pushHistory();
+      updateDoc((d) => ({ ...d, blocks: d.blocks.filter((_, i) => i !== index) }));
+      setCursor((c) => ({
+        ...c,
+        blockIndex: Math.min(c.blockIndex, doc.blocks.length - 2),
+      }));
+    },
+    [doc.blocks.length, pushHistory, updateDoc]
+  );
+
+  // ブロック種別変更
+  const changeBlockType = useCallback(
+    (index: number, newType: Block["type"]) => {
+      const block = doc.blocks[index];
+      if (!block || block.type === newType) return;
+      pushHistory();
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        const oldText = block.type === "serif" ? block.speech : (block as any).text || "";
+        if (newType === "serif") {
+          nb[index] = { type: "serif", speaker: "", speech: oldText };
+        } else {
+          nb[index] = { type: newType, text: oldText } as any;
+        }
+        return { ...d, blocks: nb };
+      });
+      setCursor({ blockIndex: index, field: newType === "serif" ? "speaker" : "text", charIndex: 0 });
+    },
+    [doc.blocks, pushHistory, updateDoc]
+  );
 
   const insertBlock = useCallback(
     (block: Block) => {
@@ -133,22 +186,31 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const drawCursor = cursorVisible ? cursor : null;
     if (mode === "script") {
       canvas.width = PAGE_W;
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage);
+      drawScript(ctx, doc, cols, drawCursor, currentPage);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h);
+      drawHorizontal(ctx, doc, drawCursor, containerSize.w, containerSize.h);
     }
-  }, [doc, cursor, containerSize, mode, currentPage]);
+  }, [doc, cursor, cursorVisible, containerSize, mode, currentPage]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
+
+  // カーソル点滅
+  useEffect(() => {
+    const interval = setInterval(() => setCursorVisible((v) => !v), 530);
+    return () => clearInterval(interval);
+  }, []);
+  // カーソル移動時にリセット
+  useEffect(() => { setCursorVisible(true); }, [cursor]);
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -195,7 +257,45 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   // キーボード
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "z") { e.preventDefault(); undo(); return; }
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === "z") { e.preventDefault(); undo(); return; }
+
+      // コピー
+      if (mod && e.key === "c") {
+        const text = getFieldText(cursor);
+        if (text) navigator.clipboard?.writeText(text);
+        return;
+      }
+
+      // ペースト
+      if (mod && e.key === "v") {
+        e.preventDefault();
+        navigator.clipboard?.readText().then((clipText) => {
+          if (!clipText) return;
+          pushHistory();
+          const { blockIndex, field, charIndex } = cursor;
+          const text = getFieldText(cursor);
+          const newText = text.slice(0, charIndex) + clipText + text.slice(charIndex);
+          updateDoc((d) => {
+            const nb = [...d.blocks];
+            const b = { ...nb[blockIndex] } as any;
+            if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
+            else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+            else b.text = newText;
+            nb[blockIndex] = b;
+            return { ...d, blocks: nb };
+          });
+          setCursor({ ...cursor, charIndex: charIndex + clipText.length });
+        });
+        return;
+      }
+
+      // ブロック移動 (Ctrl+Shift+↑/↓)
+      if (mod && e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        moveBlock(cursor.blockIndex, e.key === "ArrowUp" ? "up" : "down");
+        return;
+      }
 
       const { blockIndex, field, charIndex } = cursor;
       const block = doc.blocks[blockIndex];
@@ -279,7 +379,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         return;
       }
     },
-    [cursor, doc, getFieldText, updateDoc, pushHistory, undo, mode]
+    [cursor, doc, getFieldText, updateDoc, pushHistory, undo, mode, moveBlock]
   );
 
   // テキスト入力
@@ -331,6 +431,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         <div className="mx-1 h-4 w-px bg-gray-200" />
         <ToolBtn label="元に戻す" shortcut="⌘Z" onClick={undo} />
 
+        <div className="mx-1 h-4 w-px bg-gray-200" />
+        <ToolBtn label={showPanel ? "パネル非表示" : "パネル"} onClick={() => setShowPanel((v) => !v)} />
+
         <div className="flex-1" />
 
         {/* ページ送り（台本モード） */}
@@ -356,18 +459,29 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* Canvas */}
-      <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
-        {mode === "script" ? (
-          <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-            <canvas ref={canvasRef} onClick={handleClick} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
-            <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
-          </div>
-        ) : (
-          <>
-            <canvas ref={canvasRef} onClick={handleClick} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
-            <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
-          </>
+      {/* Canvas + Side Panel */}
+      <div className="flex flex-1 overflow-hidden">
+        <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
+          {mode === "script" ? (
+            <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
+              <canvas ref={canvasRef} onClick={handleClick} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
+              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+            </div>
+          ) : (
+            <>
+              <canvas ref={canvasRef} onClick={handleClick} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
+              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+            </>
+          )}
+        </div>
+        {showPanel && (
+          <BlockPanel
+            doc={doc}
+            cursor={cursor}
+            onMoveBlock={moveBlock}
+            onDeleteBlock={deleteBlock}
+            onChangeBlockType={changeBlockType}
+          />
         )}
       </div>
     </div>
