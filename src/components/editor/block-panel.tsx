@@ -1,19 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import {
   type PlayDocument,
   type CursorPosition,
   type Block,
   blockLabel,
 } from "@/lib/editor/play-document";
-import { ChevronUp, ChevronDown, Trash2 } from "lucide-react";
+import { ChevronUp, ChevronDown, Trash2, GripVertical } from "lucide-react";
 
 type Props = {
   doc: PlayDocument;
   cursor: CursorPosition;
   onMoveBlock: (fromIndex: number, direction: "up" | "down") => void;
+  onReorderBlock: (fromIndex: number, toIndex: number) => void;
   onDeleteBlock: (index: number) => void;
   onChangeBlockType: (index: number, newType: Block["type"]) => void;
+  onSelectBlock: (index: number) => void;
 };
 
 const CONVERTIBLE_TYPES: Block["type"][] = ["serif", "togaki", "sceneHeading", "setting"];
@@ -22,9 +25,12 @@ export function BlockPanel({
   doc,
   cursor,
   onMoveBlock,
+  onReorderBlock,
   onDeleteBlock,
   onChangeBlockType,
+  onSelectBlock,
 }: Props) {
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const block = doc.blocks[cursor.blockIndex];
   if (!block) return null;
 
@@ -128,22 +134,46 @@ export function BlockPanel({
         </div>
       </div>
 
-      {/* ブロック一覧 */}
+      {/* ブロック一覧（ドラッグ&ドロップ対応） */}
       <div className="p-3 flex-1 min-h-0">
-        <p className="text-gray-400 mb-1.5">ブロック一覧</p>
+        <p className="text-gray-400 mb-1.5">ブロック一覧（ドラッグで並替）</p>
         <div className="space-y-0.5 overflow-y-auto" style={{ maxHeight: "calc(100% - 20px)" }}>
           {doc.blocks.map((b, i) => (
             <div
               key={i}
-              className={`px-2 py-1 rounded text-[11px] truncate ${
-                i === bi
-                  ? "bg-blue-50 text-blue-700 font-medium"
-                  : "text-gray-500 hover:bg-gray-50"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", String(i));
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragOverIndex(i);
+              }}
+              onDragLeave={() => setDragOverIndex(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+                if (!isNaN(from) && from !== i) onReorderBlock(from, i);
+                setDragOverIndex(null);
+              }}
+              onDragEnd={() => setDragOverIndex(null)}
+              onClick={() => onSelectBlock(i)}
+              className={`flex items-center gap-1 px-1 py-1 rounded text-[11px] cursor-grab active:cursor-grabbing transition-colors ${
+                dragOverIndex === i
+                  ? "bg-blue-100 border border-blue-300"
+                  : i === bi
+                    ? "bg-blue-50 text-blue-700 font-medium"
+                    : "text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <span className="text-gray-400 mr-1">{i + 1}.</span>
-              {blockLabel(b.type)}
-              {b.type === "serif" && ` ${(b as any).speaker || ""}`}
+              <GripVertical className="h-3 w-3 text-gray-300 shrink-0" />
+              <span className="truncate">
+                <span className="text-gray-400 mr-1">{i + 1}.</span>
+                {blockLabel(b.type)}
+                {b.type === "serif" && ` ${(b as any).speaker || ""}`}
+              </span>
             </div>
           ))}
         </div>

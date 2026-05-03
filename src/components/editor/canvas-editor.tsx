@@ -91,6 +91,38 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     }
   }, [scheduleSave]);
 
+  // ブロック並替（ドラッグ&ドロップ）
+  const reorderBlock = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
+      pushHistory();
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        const [moved] = nb.splice(fromIndex, 1);
+        nb.splice(toIndex, 0, moved);
+        return { ...d, blocks: nb };
+      });
+      setCursor((c) => {
+        if (c.blockIndex === fromIndex) return { ...c, blockIndex: toIndex };
+        return c;
+      });
+    },
+    [pushHistory, updateDoc]
+  );
+
+  // ブロック選択（パネルからクリック）
+  const selectBlock = useCallback(
+    (index: number) => {
+      const block = doc.blocks[index];
+      if (!block) return;
+      const field = block.type === "serif" ? "speaker" : block.type === "title" ? "title" : "text";
+      setCursor({ blockIndex: index, field, charIndex: 0 });
+      setSelAnchor(null);
+      inputRef.current?.focus();
+    },
+    [doc.blocks]
+  );
+
   // ブロック移動
   const moveBlock = useCallback(
     (fromIndex: number, direction: "up" | "down") => {
@@ -661,8 +693,10 @@ export function CanvasEditor({ playId, initialContent }: Props) {
             doc={doc}
             cursor={cursor}
             onMoveBlock={moveBlock}
+            onReorderBlock={reorderBlock}
             onDeleteBlock={deleteBlock}
             onChangeBlockType={changeBlockType}
+            onSelectBlock={selectBlock}
           />
         )}
       </div>
