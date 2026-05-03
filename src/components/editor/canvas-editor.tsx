@@ -39,11 +39,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const [cursor, setCursor] = useState<CursorPosition>({
     blockIndex: 0, field: "title", charIndex: 0,
   });
+  // 選択範囲: selAnchorがnullでなければ、anchor～cursorが選択範囲
+  const [selAnchor, setSelAnchor] = useState<CursorPosition | null>(null);
   const [mode, setMode] = useState<EditorMode>("script");
   const [currentPage, setCurrentPage] = useState(0);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [showPanel, setShowPanel] = useState(true);
-  const [cursorVisible, setCursorVisible] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<ColLayout[]>([]);
@@ -186,39 +187,38 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const drawCursor = cursorVisible ? cursor : null;
     if (mode === "script") {
       canvas.width = PAGE_W;
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, drawCursor, currentPage);
+      drawScript(ctx, doc, cols, cursor, currentPage);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, drawCursor, containerSize.w, containerSize.h);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h);
     }
-  }, [doc, cursor, cursorVisible, containerSize, mode, currentPage]);
+  }, [doc, cursor, containerSize, mode, currentPage]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // カーソル点滅
-  useEffect(() => {
-    const interval = setInterval(() => setCursorVisible((v) => !v), 500);
-    return () => clearInterval(interval);
-  }, []);
-  useEffect(() => { setCursorVisible(true); }, [cursor]);
-
-  // textareaに現在フィールドのテキストを同期（ネイティブコピペ対応）
+  // textareaに選択テキストを同期（ネイティブコピペ対応）
   useEffect(() => {
     const ta = inputRef.current;
     if (!ta) return;
     const text = getFieldText(cursor);
-    ta.value = text;
-    ta.setSelectionRange(0, text.length); // 全選択状態にしてCmd+Cで全文コピー
-  }, [cursor, doc]); // eslint-disable-line
+    if (selAnchor && selAnchor.blockIndex === cursor.blockIndex && selAnchor.field === cursor.field) {
+      // 範囲選択中：選択部分だけをtextareaにセット
+      const start = Math.min(selAnchor.charIndex, cursor.charIndex);
+      const end = Math.max(selAnchor.charIndex, cursor.charIndex);
+      ta.value = text.slice(start, end);
+    } else {
+      ta.value = text;
+    }
+    ta.select();
+  }, [cursor, selAnchor, doc]); // eslint-disable-line
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -256,7 +256,17 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       } else {
         newCursor = hitTestHorizontal(doc, mx, my);
       }
-      if (newCursor) setCursor(newCursor);
+      if (newCursor) {
+        if (e.shiftKey && cursor.blockIndex === newCursor.blockIndex && cursor.field === newCursor.field) {
+          // Shift+クリック: 選択範囲を拡張
+          if (!selAnchor) setSelAnchor({ ...cursor });
+          setCursor(newCursor);
+        } else {
+          // 通常クリック: 選択解除
+          setSelAnchor(null);
+          setCursor(newCursor);
+        }
+      }
       inputRef.current?.focus();
     },
     [doc, containerSize, mode, currentPage]
@@ -268,9 +278,17 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "z") { e.preventDefault(); undo(); return; }
 
-      // コピーはブラウザネイティブに任せる（textareaに全文が入っている）
-      if (mod && e.key === "c") return; // デフォルト動作を許可
-      if (mod && e.key === "a") return; // 全選択も許可
+      // コピーはブラウザネイティブに任せる（textareaに選択テキストが入っている）
+      if (mod && e.key === "c") return;
+
+      // 全選択: フィールド全体を選択
+      if (mod && e.key === "a") {
+        e.preventDefault();
+        const text = getFieldText(cursor);
+        setSelAnchor({ ...cursor, charIndex: 0 });
+        setCursor({ ...cursor, charIndex: text.length });
+        return;
+      }
 
       // ブロック移動 (Ctrl+Shift+↑/↓)
       if (mod && e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
@@ -303,6 +321,21 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       if (e.key === "Backspace") {
         e.preventDefault();
+        // 選択範囲がある場合はまず削除
+        const delResult = deleteSelection();
+        if (delResult !== null) {
+          pushHistory();
+          updateDoc((d) => {
+            const nb = [...d.blocks];
+            const b = { ...nb[cursor.blockIndex] } as any;
+            if (b.type === "title") { if (cursor.field === "title") b.title = delResult; else b.author = delResult; }
+            else if (b.type === "serif") { if (cursor.field === "speaker") b.speaker = delResult; else b.speech = delResult; }
+            else b.text = delResult;
+            nb[cursor.blockIndex] = b;
+            return { ...d, blocks: nb };
+          });
+          return;
+        }
         pushHistory();
         const text = getFieldText(cursor);
         if (charIndex > 0) {
@@ -329,17 +362,26 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         return;
       }
 
-      // 矢印キー
+      // 矢印キー（Shift押下で選択範囲拡張）
       const isVertical = mode === "script";
+      const handleArrowMove = (newCursor: CursorPosition) => {
+        if (e.shiftKey) {
+          if (!selAnchor) setSelAnchor({ ...cursor });
+        } else {
+          setSelAnchor(null);
+        }
+        setCursor(newCursor);
+      };
+
       if (e.key === "ArrowDown" || (!isVertical && e.key === "ArrowRight")) {
         e.preventDefault();
         const text = getFieldText(cursor);
-        if (charIndex < text.length) setCursor({ ...cursor, charIndex: charIndex + 1 });
+        if (charIndex < text.length) handleArrowMove({ ...cursor, charIndex: charIndex + 1 });
         return;
       }
       if (e.key === "ArrowUp" || (!isVertical && e.key === "ArrowLeft")) {
         e.preventDefault();
-        if (charIndex > 0) setCursor({ ...cursor, charIndex: charIndex - 1 });
+        if (charIndex > 0) handleArrowMove({ ...cursor, charIndex: charIndex - 1 });
         return;
       }
       if ((isVertical && e.key === "ArrowLeft") || (!isVertical && e.key === "ArrowDown")) {
@@ -364,6 +406,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [cursor, doc, getFieldText, updateDoc, pushHistory, undo, mode, moveBlock]
   );
 
+  // 選択範囲を削除して新しいテキストに置き換え
+  const deleteSelection = useCallback((): string | null => {
+    if (!selAnchor || selAnchor.blockIndex !== cursor.blockIndex || selAnchor.field !== cursor.field) return null;
+    const text = getFieldText(cursor);
+    const start = Math.min(selAnchor.charIndex, cursor.charIndex);
+    const end = Math.max(selAnchor.charIndex, cursor.charIndex);
+    if (start === end) return null;
+    const newText = text.slice(0, start) + text.slice(end);
+    setSelAnchor(null);
+    setCursor({ ...cursor, charIndex: start });
+    return newText;
+  }, [selAnchor, cursor, getFieldText]);
+
   // テキスト入力（通常入力 + ペースト共通）
   const applyTextChange = useCallback(
     (newFullText: string) => {
@@ -371,6 +426,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const oldText = getFieldText(cursor);
       if (newFullText === oldText) return;
       pushHistory();
+      setSelAnchor(null);
       // カーソル位置はテキスト長の差分で計算
       const newCharIndex = cursor.charIndex + (newFullText.length - oldText.length);
       updateDoc((d) => {
