@@ -220,6 +220,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     1 // 1倍以上にはしない
   );
 
+  // IME変換中テキスト
+  const [composingText, setComposingText] = useState("");
   // ブロックドラッグ状態
   const [blockDrag, setBlockDrag] = useState<BlockDragState>(null);
   const [scriptDrag, setScriptDrag] = useState<ScriptDragState>(null);
@@ -320,7 +322,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<CursorPosition | null>(null);
   const isComposingRef = useRef(false);
-  const [composingText, setComposingText] = useState(""); // IME変換中の仮テキスト
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
