@@ -800,7 +800,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
       <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
         onCompositionStart={() => { isComposingRef.current = true; }}
-        onCompositionEnd={(e) => { isComposingRef.current = false; handleInput(e as any); }}
+        onCompositionEnd={() => { isComposingRef.current = false; }}
         className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
 
       {/* Canvas + Side Panel */}
