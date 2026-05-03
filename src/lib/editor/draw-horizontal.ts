@@ -47,7 +47,10 @@ const ROW_HEIGHTS: Record<string, number> = {
   endMark: 48,
 };
 
+const H_DRAG_HANDLE_W = 20; // ドラッグハンドル幅
 const H_MARGIN = { top: 20, left: 40, right: 40 };
+
+export { ROW_HEIGHTS, H_MARGIN, H_DRAG_HANDLE_W, computeRowPositions };
 const H_SPEAKER_W = 100;
 const H_SEP_X = H_MARGIN.left + H_SPEAKER_W + 12;
 const H_SPEECH_LEFT = H_SEP_X + 14;
@@ -65,13 +68,19 @@ function computeRowPositions(doc: PlayDocument): number[] {
 
 import type { SelectionRange } from "./draw-script";
 
+export type BlockDragState = {
+  draggingIndex: number;
+  mouseY: number;
+} | null;
+
 export function drawHorizontal(
   ctx: CanvasRenderingContext2D,
   doc: PlayDocument,
   cursor: CursorPosition | null,
   w: number,
   h: number,
-  selection: SelectionRange = null
+  selection: SelectionRange = null,
+  blockDrag: BlockDragState = null
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const fontSize = cfg.fontSize * PT2PX;
@@ -291,7 +300,51 @@ export function drawHorizontal(
         break;
       }
     }
+
+    // ドラッグハンドル（左端の⠿アイコン）
+    ctx.fillStyle = "#ccc";
+    const hx = 8;
+    const hy = cy;
+    for (let r = -1; r <= 1; r++) {
+      for (let c = 0; c < 2; c++) {
+        ctx.beginPath();
+        ctx.arc(hx + c * 5, hy + r * 5, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
+
+  // ─── ドラッグ中のインジケーター ───
+  if (blockDrag) {
+    // ドロップ先の線を描画
+    const dropIndex = findDropIndex(doc, blockDrag.mouseY);
+    const dropY = dropIndex < rowY.length ? rowY[dropIndex] : (rowY.length > 0 ? rowY[rowY.length - 1] + (ROW_HEIGHTS[doc.blocks[doc.blocks.length - 1]?.type] || 42) : H_MARGIN.top);
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(H_MARGIN.left, dropY);
+    ctx.lineTo(w - H_MARGIN.right, dropY);
+    ctx.stroke();
+    // ドラッグ中のブロックを半透明で表示
+    ctx.globalAlpha = 0.3;
+    const dragBlock = doc.blocks[blockDrag.draggingIndex];
+    if (dragBlock) {
+      const dragH = ROW_HEIGHTS[dragBlock.type] || 42;
+      ctx.fillStyle = "#2563eb";
+      ctx.fillRect(0, blockDrag.mouseY - dragH / 2, w, dragH);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** ドロップ先のインデックスを計算 */
+export function findDropIndex(doc: PlayDocument, mouseY: number): number {
+  const rowY = computeRowPositions(doc);
+  for (let i = 0; i < rowY.length; i++) {
+    const rowH = ROW_HEIGHTS[doc.blocks[i]?.type] || 42;
+    if (mouseY < rowY[i] + rowH / 2) return i;
+  }
+  return doc.blocks.length;
 }
 
 export function hitTestHorizontal(

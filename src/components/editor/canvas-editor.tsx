@@ -20,7 +20,7 @@ import {
   PAGE_W,
   PAGE_H,
 } from "@/lib/editor/draw-script";
-import { drawHorizontal, hitTestHorizontal } from "@/lib/editor/draw-horizontal";
+import { drawHorizontal, hitTestHorizontal, findDropIndex, H_DRAG_HANDLE_W, type BlockDragState } from "@/lib/editor/draw-horizontal";
 import { savePlayBody } from "@/actions/plays";
 
 export type EditorMode = "horizontal" | "script";
@@ -213,6 +213,10 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     1 // 1倍以上にはしない
   );
 
+  // ブロックドラッグ状態
+  const [blockDrag, setBlockDrag] = useState<BlockDragState>(null);
+  const blockDragRef = useRef<{ index: number; startY: number } | null>(null);
+
   // 描画
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -235,9 +239,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag);
     }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage]);
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
@@ -307,11 +311,30 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const isDraggingRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // mousedown: カーソル設置 + ドラッグ開始（右クリック時は選択を維持）
+  // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (e.button === 2) return; // 右クリックは選択を維持
+      if (e.button === 2) return;
       setContextMenu(null);
+
+      // 横書きモードでハンドル領域をクリック → ブロックドラッグ開始
+      if (mode === "horizontal") {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
+          if (mx < H_DRAG_HANDLE_W) {
+            const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+            const pos = hitTestHorizontal(doc, mx + 40, my); // オフセットして行を特定
+            if (pos) {
+              blockDragRef.current = { index: pos.blockIndex, startY: my };
+              setBlockDrag({ draggingIndex: pos.blockIndex, mouseY: my });
+              return;
+            }
+          }
+        }
+      }
+
       const pos = hitTest(e);
       if (!pos) return;
       if (e.shiftKey && cursor.blockIndex === pos.blockIndex && cursor.field === pos.field) {
@@ -324,19 +347,30 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       isDraggingRef.current = true;
       inputRef.current?.focus();
     },
-    [hitTest, cursor, selAnchor]
+    [hitTest, cursor, selAnchor, mode, containerSize, doc]
   );
 
-  // mousemove: ドラッグ中に選択範囲を拡張
+  // mousemove: テキスト選択 or ブロックドラッグ
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // ブロックドラッグ中
+      if (blockDragRef.current) {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+          setBlockDrag({ draggingIndex: blockDragRef.current.index, mouseY: my });
+        }
+        return;
+      }
+      // テキスト選択
       if (!isDraggingRef.current) return;
       const pos = hitTest(e);
       if (pos && selAnchor && pos.blockIndex === selAnchor.blockIndex && pos.field === selAnchor.field) {
         setCursor(pos);
       }
     },
-    [hitTest, selAnchor]
+    [hitTest, selAnchor, containerSize]
   );
 
   // 右クリック: コンテキストメニュー
@@ -390,17 +424,35 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     return () => document.removeEventListener("click", close);
   }, [contextMenu]);
 
-  // mouseup: ドラッグ終了、選択が0幅なら解除
+  // mouseup: テキスト選択確定 or ブロックドロップ
   const handleMouseUp = useCallback(
-    () => {
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      // ブロックドロップ
+      if (blockDragRef.current && blockDrag) {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+          const dropIdx = findDropIndex(doc, my);
+          const fromIdx = blockDragRef.current.index;
+          if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
+            const toIdx = dropIdx > fromIdx ? dropIdx - 1 : dropIdx;
+            reorderBlock(fromIdx, toIdx);
+          }
+        }
+        blockDragRef.current = null;
+        setBlockDrag(null);
+        return;
+      }
+
       isDraggingRef.current = false;
       if (selAnchor && selAnchor.blockIndex === cursor.blockIndex &&
           selAnchor.field === cursor.field &&
           selAnchor.charIndex === cursor.charIndex) {
-        setSelAnchor(null); // 選択なし（同じ位置でクリック）
+        setSelAnchor(null);
       }
     },
-    [selAnchor, cursor]
+    [selAnchor, cursor, blockDrag, containerSize, doc, reorderBlock]
   );
 
   // キーボード
