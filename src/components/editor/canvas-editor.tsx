@@ -527,6 +527,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   // キーボード
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // IME変換中はキー操作を無視（Enter/Backspace等がIMEに使われる）
+      if (isComposingRef.current || e.nativeEvent.isComposing || e.key === "Process") return;
+
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "z") { e.preventDefault(); undo(); return; }
 
@@ -701,8 +704,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLTextAreaElement>) => {
+      const nativeEvent = e.nativeEvent as InputEvent;
+      const composing = isComposingRef.current || nativeEvent?.isComposing;
+
       // IME変換中: textareaをクリアせず表示だけ更新
-      if (isComposingRef.current) {
+      if (composing) {
         setComposingText(e.currentTarget.value);
         return;
       }
