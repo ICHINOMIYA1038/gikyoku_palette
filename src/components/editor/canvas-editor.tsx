@@ -701,13 +701,17 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLTextAreaElement>) => {
-      // IME変換中は確定まで処理しない
-      if (isComposingRef.current) return;
+      // IME変換中: textareaをクリアせず表示だけ更新
+      if (isComposingRef.current) {
+        setComposingText(e.currentTarget.value);
+        return;
+      }
 
       const input = e.currentTarget;
       const value = input.value;
       if (!value) return;
       input.value = "";
+      setComposingText("");
 
       const delResult = deleteSelection();
       const { blockIndex, field } = cursor;
@@ -803,38 +807,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
         onCompositionStart={() => { isComposingRef.current = true; setComposingText(""); }}
         onCompositionUpdate={(e) => { setComposingText(e.data || ""); }}
-        onCompositionEnd={() => {
-          isComposingRef.current = false;
-          setComposingText("");
-          // ブラウザがtextareaを更新するのを待ってから処理
-          setTimeout(() => {
-            const ta = inputRef.current;
-            if (ta && ta.value) {
-              const value = ta.value;
-              ta.value = "";
-              // handleInputと同じ処理を直接実行
-              const delResult = deleteSelection();
-              const { blockIndex, field } = cursor;
-              const ci = delResult !== null
-                ? Math.min(cursor.charIndex, selAnchor?.charIndex ?? cursor.charIndex)
-                : cursor.charIndex;
-              const text = delResult !== null ? delResult : getFieldText(cursor);
-              const newText = text.slice(0, ci) + value + text.slice(ci);
-              pushHistory();
-              setSelAnchor(null);
-              updateDoc((d) => {
-                const nb = [...d.blocks];
-                const b = { ...nb[blockIndex] } as any;
-                if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
-                else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
-                else b.text = newText;
-                nb[blockIndex] = b;
-                return { ...d, blocks: nb };
-              });
-              setCursor((c) => ({ ...c, charIndex: ci + value.length }));
-            }
-          }, 0);
-        }}
+        onCompositionEnd={() => { isComposingRef.current = false; setComposingText(""); }}
         className="absolute z-10"
         style={{ top: 44, left: 8, width: 300, height: 36, opacity: 0, fontSize: 16, border: "none", outline: "none", background: "transparent", resize: "none", overflow: "hidden", color: "transparent", caretColor: "transparent" }}
         autoFocus />
