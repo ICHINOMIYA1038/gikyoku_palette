@@ -273,6 +273,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   );
 
   const isDraggingRef = useRef(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + ドラッグ開始
   const handleMouseDown = useCallback(
@@ -303,6 +304,57 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     },
     [hitTest, selAnchor]
   );
+
+  // 右クリック: コンテキストメニュー
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    },
+    []
+  );
+
+  const ctxMenuCopy = useCallback(() => {
+    document.execCommand("copy");
+    setContextMenu(null);
+  }, []);
+
+  const ctxMenuPaste = useCallback(() => {
+    navigator.clipboard?.readText().then((text) => {
+      if (!text) return;
+      pushHistory();
+      const { blockIndex, field, charIndex } = cursor;
+      const fieldText = getFieldText(cursor);
+      const newText = fieldText.slice(0, charIndex) + text + fieldText.slice(charIndex);
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        const b = { ...nb[blockIndex] } as any;
+        if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
+        else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+        else b.text = newText;
+        nb[blockIndex] = b;
+        return { ...d, blocks: nb };
+      });
+      setCursor({ ...cursor, charIndex: charIndex + text.length });
+      setSelAnchor(null);
+    });
+    setContextMenu(null);
+  }, [cursor, getFieldText, pushHistory, updateDoc]);
+
+  const ctxMenuSelectAll = useCallback(() => {
+    const text = getFieldText(cursor);
+    setSelAnchor({ ...cursor, charIndex: 0 });
+    setCursor({ ...cursor, charIndex: text.length });
+    setContextMenu(null);
+  }, [cursor, getFieldText]);
+
+  // クリックでメニュー閉じる
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [contextMenu]);
 
   // mouseup: ドラッグ終了、選択が0幅なら解除
   const handleMouseUp = useCallback(
@@ -570,16 +622,38 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
               <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </div>
           ) : (
             <>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
               <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </>
           )}
         </div>
+        {/* コンテキストメニュー */}
+        {contextMenu && (
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button type="button" onClick={ctxMenuCopy}
+              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+              コピー
+            </button>
+            <button type="button" onClick={ctxMenuPaste}
+              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+              ペースト
+            </button>
+            <div className="border-t border-gray-100 my-0.5" />
+            <button type="button" onClick={ctxMenuSelectAll}
+              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
+              すべて選択
+            </button>
+          </div>
+        )}
+
         {showPanel && (
           <BlockPanel
             doc={doc}
