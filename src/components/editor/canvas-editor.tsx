@@ -319,6 +319,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<CursorPosition | null>(null);
+  const isComposingRef = useRef(false); // IME変換中フラグ
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
@@ -698,12 +699,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLTextAreaElement>) => {
+      // IME変換中は確定まで処理しない
+      if (isComposingRef.current) return;
+
       const input = e.currentTarget;
       const value = input.value;
       if (!value) return;
-      input.value = ""; // 入力後クリア
+      input.value = "";
 
-      // 選択範囲があれば先に削除
       const delResult = deleteSelection();
       const { blockIndex, field } = cursor;
       const charIndex = delResult !== null
@@ -796,6 +799,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
       <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
+        onCompositionStart={() => { isComposingRef.current = true; }}
+        onCompositionEnd={(e) => { isComposingRef.current = false; handleInput(e as any); }}
         className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
 
       {/* Canvas + Side Panel */}
