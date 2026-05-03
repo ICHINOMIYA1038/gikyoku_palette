@@ -172,13 +172,22 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
   return cols;
 }
 
+/** 選択範囲 */
+export type SelectionRange = {
+  blockIndex: number;
+  field: string;
+  start: number;
+  end: number;
+} | null;
+
 // ─── 描画 ───
 export function drawScript(
   ctx: CanvasRenderingContext2D,
   doc: PlayDocument,
   cols: ColLayout[],
   cursor: CursorPosition | null,
-  currentPage: number
+  currentPage: number,
+  selection: SelectionRange = null
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const bodyFont = fontStr(FONT_SIZE, cfg);
@@ -297,40 +306,43 @@ export function drawScript(
       }
     }
 
-    // ─── 本文 ───
-    if (block.type === "togaki" || block.type === "setting") {
-      // ト書き: 小さいフォント + 字下げ（中央寄せ的配置）
-      const tfs = TOGAKI_FONT_SIZE;
-      const tCharH = tfs + Math.round(tfs * 0.35);
-      const indent = TOGAKI_INDENT_CHARS * CHAR_H; // 上から1文字分空ける
-      ctx.font = fontStr(tfs, cfg);
-      ctx.fillStyle = "#333";
-      for (let i = 0; i < col.chars.length; i++) {
-        const ch = col.chars[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - tfs / 2 + (tfs - cw) / 2, BODY_TOP + indent + i * tCharH);
+    // ─── 選択ハイライト + 本文 ───
+    const isTg = block.type === "togaki" || block.type === "setting";
+    const fs = isTg ? TOGAKI_FONT_SIZE : FONT_SIZE;
+    const cH = isTg ? (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)) : CHAR_H;
+    const indent = isTg ? TOGAKI_INDENT_CHARS * CHAR_H : 0;
+
+    // 選択ハイライト描画
+    if (selection && selection.blockIndex === col.blockIndex &&
+        ((col.field === "speech" && selection.field === "speech") ||
+         (col.field === "text" && selection.field === "text"))) {
+      const selStart = Math.max(selection.start - col.startCharIndex, 0);
+      const selEnd = Math.min(selection.end - col.startCharIndex, col.chars.length);
+      if (selEnd > selStart) {
+        ctx.fillStyle = "rgba(59, 130, 246, 0.2)";
+        ctx.fillRect(
+          col.x - fs / 2 - 2,
+          BODY_TOP + indent + selStart * cH,
+          fs + 4,
+          (selEnd - selStart) * cH
+        );
       }
-      // カーソル
-      if (isActive && cursor?.field === "text") {
-        const li = cursor.charIndex - col.startCharIndex;
-        if (li >= 0 && li <= col.chars.length) {
-          drawCursorLine(ctx, col.x - tfs / 2 - 1, BODY_TOP + indent + li * tCharH, tfs + 2);
-        }
-      }
-    } else {
-      // セリフ / その他: 通常フォント、字下げなし
-      ctx.font = bodyFont;
-      ctx.fillStyle = "#1a1a1a";
-      for (let i = 0; i < col.chars.length; i++) {
-        const ch = col.chars[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, BODY_TOP + i * CHAR_H);
-      }
-      if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
-        const li = cursor.charIndex - col.startCharIndex;
-        if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
-          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, BODY_TOP + li * CHAR_H, FONT_SIZE + 2);
-        }
+    }
+
+    // 本文テキスト描画
+    ctx.font = isTg ? fontStr(TOGAKI_FONT_SIZE, cfg) : bodyFont;
+    ctx.fillStyle = isTg ? "#333" : "#1a1a1a";
+    for (let i = 0; i < col.chars.length; i++) {
+      const ch = col.chars[i];
+      const cw = ctx.measureText(ch).width;
+      ctx.fillText(ch, col.x - fs / 2 + (fs - cw) / 2, BODY_TOP + indent + i * cH);
+    }
+
+    // カーソル描画
+    if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
+      const li = cursor.charIndex - col.startCharIndex;
+      if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
+        drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + li * cH, fs + 2);
       }
     }
   }

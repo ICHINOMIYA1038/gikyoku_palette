@@ -12,6 +12,7 @@ import {
 import { BlockPanel } from "./block-panel";
 import {
   type ColLayout,
+  type SelectionRange,
   computeColumns,
   drawScript,
   hitTestScript,
@@ -187,19 +188,24 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // 選択範囲を計算
+    const sel: SelectionRange = selAnchor && selAnchor.blockIndex === cursor.blockIndex && selAnchor.field === cursor.field
+      ? { blockIndex: cursor.blockIndex, field: cursor.field, start: Math.min(selAnchor.charIndex, cursor.charIndex), end: Math.max(selAnchor.charIndex, cursor.charIndex) }
+      : null;
+
     if (mode === "script") {
       canvas.width = PAGE_W;
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage);
+      drawScript(ctx, doc, cols, cursor, currentPage, sel);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel);
     }
-  }, [doc, cursor, containerSize, mode, currentPage]);
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);

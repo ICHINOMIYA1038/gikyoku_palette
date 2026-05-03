@@ -63,12 +63,15 @@ function computeRowPositions(doc: PlayDocument): number[] {
   return positions;
 }
 
+import type { SelectionRange } from "./draw-script";
+
 export function drawHorizontal(
   ctx: CanvasRenderingContext2D,
   doc: PlayDocument,
   cursor: CursorPosition | null,
   w: number,
-  h: number
+  h: number,
+  selection: SelectionRange = null
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const fontSize = cfg.fontSize * PT2PX;
@@ -216,8 +219,15 @@ export function drawHorizontal(
         ctx.moveTo(H_SEP_X, y + 8);
         ctx.lineTo(H_SEP_X, y + rowH - 8);
         ctx.stroke();
-        // セリフ
+        // セリフ - 選択ハイライト
         ctx.font = fontStr(fontSize, cfg);
+        if (selection && selection.blockIndex === bi && selection.field === "speech") {
+          const hlStart = ctx.measureText((block.speech || "").slice(0, selection.start)).width;
+          const hlEnd = ctx.measureText((block.speech || "").slice(0, selection.end)).width;
+          ctx.fillStyle = "rgba(59, 130, 246, 0.2)";
+          ctx.fillRect(H_SPEECH_LEFT + hlStart, y + 4, hlEnd - hlStart, rowH - 8);
+        }
+        // セリフテキスト
         ctx.fillStyle = "#1a1a1a";
         ctx.fillText(block.speech || "", H_SPEECH_LEFT, cy);
         // 行の下区切り
