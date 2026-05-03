@@ -49,6 +49,24 @@ const CHAR_H = Math.floor(BODY_H / CHARS_PER_COL); // 1文字の送りピッチ
 
 export { PAGE_W, PAGE_H };
 
+/** カーソル描画（横線タイプ、縦書き用） */
+function drawCursorLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
+  // メインカーソル（太い青線）
+  ctx.fillStyle = "#2563eb";
+  ctx.fillRect(x, y, width, 3);
+  // 両端に小さな三角形（視認性向上）
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - 3, y - 4);
+  ctx.lineTo(x + 3, y - 4);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + width, y);
+  ctx.lineTo(x + width - 3, y - 4);
+  ctx.lineTo(x + width + 3, y - 4);
+  ctx.fill();
+}
+
 function fontStr(size: number, cfg: TypesettingConfig, bold = false) {
   const family = cfg.fontFamily === "gothic"
     ? '"Noto Sans JP", "游ゴシック", sans-serif'
@@ -228,8 +246,7 @@ export function drawScript(
         ctx.fillText(ch, col.x - cw / 2, BODY_TOP + i * (fs + 6));
       }
       if (isActive && cursor?.field === "title") {
-        ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - fs / 2, BODY_TOP + cursor.charIndex * (fs + 6), fs + 2, 3);
+        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + cursor.charIndex * (fs + 6), fs + 2);
       }
       continue;
     }
@@ -246,8 +263,7 @@ export function drawScript(
         ctx.fillText(ch, col.x - cw / 2, BODY_TOP + offsetY + i * lineH);
       }
       if (isActive && cursor?.field === "author") {
-        ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * lineH, fs + 2, 3);
+        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * lineH, fs + 2);
       }
       continue;
     }
@@ -277,8 +293,7 @@ export function drawScript(
         ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spTop + i * spCharH);
       }
       if (isActive && cursor?.field === "speaker") {
-        ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2, 2);
+        drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2);
       }
     }
 
@@ -299,8 +314,7 @@ export function drawScript(
       if (isActive && cursor?.field === "text") {
         const li = cursor.charIndex - col.startCharIndex;
         if (li >= 0 && li <= col.chars.length) {
-          ctx.fillStyle = "#3b82f6";
-          ctx.fillRect(col.x - tfs / 2 - 1, BODY_TOP + indent + li * tCharH, tfs + 2, 2);
+          drawCursorLine(ctx, col.x - tfs / 2 - 1, BODY_TOP + indent + li * tCharH, tfs + 2);
         }
       }
     } else {
@@ -312,12 +326,10 @@ export function drawScript(
         const cw = ctx.measureText(ch).width;
         ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, BODY_TOP + i * CHAR_H);
       }
-      // カーソル
       if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
         const li = cursor.charIndex - col.startCharIndex;
         if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
-          ctx.fillStyle = "#3b82f6";
-          ctx.fillRect(col.x - FONT_SIZE / 2 - 1, BODY_TOP + li * CHAR_H, FONT_SIZE + 2, 2);
+          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, BODY_TOP + li * CHAR_H, FONT_SIZE + 2);
         }
       }
     }

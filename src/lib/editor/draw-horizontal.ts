@@ -12,6 +12,23 @@ import {
 
 const PT2PX = 96 / 72;
 
+/** カーソル描画（縦線タイプ、横書き用） */
+function drawCursorVert(ctx: CanvasRenderingContext2D, x: number, y: number, height: number) {
+  ctx.fillStyle = "#2563eb";
+  ctx.fillRect(x, y, 3, height);
+  // 上下に小さな三角形
+  ctx.beginPath();
+  ctx.moveTo(x + 1.5, y);
+  ctx.lineTo(x - 2, y - 3);
+  ctx.lineTo(x + 5, y - 3);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + 1.5, y + height);
+  ctx.lineTo(x - 2, y + height + 3);
+  ctx.lineTo(x + 5, y + height + 3);
+  ctx.fill();
+}
+
 function fontStr(size: number, cfg: TypesettingConfig, bold = false, italic = false) {
   const family = cfg.fontFamily === "gothic"
     ? '"Noto Sans JP", "游ゴシック", sans-serif'
@@ -105,17 +122,16 @@ export function drawHorizontal(
         ctx.stroke();
 
         if (isActive && cursor) {
-          ctx.fillStyle = "#3b82f6";
           if (cursor.field === "title") {
             ctx.font = fontStr(fontSize * 1.5, cfg, true);
             const cx = H_MARGIN.left + ctx.measureText((block.title || "").slice(0, cursor.charIndex)).width;
-            ctx.fillRect(cx, y + 8, 2, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16);
           } else if (cursor.field === "author") {
             ctx.font = fontStr(fontSize * 1.5, cfg, true);
             const tw = ctx.measureText(block.title || "").width;
             ctx.font = fontStr(fontSize * 0.75, cfg);
             const cx = H_MARGIN.left + tw + 24 + ctx.measureText((block.author || "").slice(0, cursor.charIndex)).width;
-            ctx.fillRect(cx, y + 8, 2, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16);
           }
         }
         break;
@@ -151,8 +167,7 @@ export function drawHorizontal(
         if (isActive && cursor?.field === "text") {
           ctx.font = fontStr(fontSize * 0.85, cfg, false, true);
           const cx = H_MARGIN.left + 12 + ctx.measureText((block.text || "").slice(0, cursor.charIndex)).width;
-          ctx.fillStyle = "#3b82f6";
-          ctx.fillRect(cx, y + 6, 2, rowH - 12);
+          drawCursorVert(ctx, cx, y + 6, rowH - 12);
         }
         break;
       }
@@ -177,8 +192,7 @@ export function drawHorizontal(
         if (isActive && cursor?.field === "text") {
           ctx.font = fontStr(fontSize * 1.1, cfg, true);
           const cx = H_MARGIN.left + ctx.measureText((block.text || "").slice(0, cursor.charIndex)).width;
-          ctx.fillStyle = "#3b82f6";
-          ctx.fillRect(cx, y + 8, 2, rowH - 16);
+          drawCursorVert(ctx, cx, y + 8, rowH - 16);
         }
         break;
       }
@@ -215,15 +229,14 @@ export function drawHorizontal(
         ctx.stroke();
 
         if (isActive && cursor) {
-          ctx.fillStyle = "#3b82f6";
           if (cursor.field === "speaker") {
             ctx.font = fontStr(speakerFontSize, cfg, true);
             const cx = H_MARGIN.left + ctx.measureText((block.speaker || "").slice(0, cursor.charIndex)).width;
-            ctx.fillRect(cx, y + 8, 2, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16);
           } else if (cursor.field === "speech") {
             ctx.font = fontStr(fontSize, cfg);
             const cx = H_SPEECH_LEFT + ctx.measureText((block.speech || "").slice(0, cursor.charIndex)).width;
-            ctx.fillRect(cx, y + 8, 2, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16);
           }
         }
         break;
@@ -254,8 +267,7 @@ export function drawHorizontal(
         if (isActive && cursor?.field === "text") {
           ctx.font = fontStr(fontSize * 0.9, cfg, false, true);
           const cx = H_SPEECH_LEFT + ctx.measureText((block.text || "").slice(0, cursor.charIndex)).width;
-          ctx.fillStyle = "#3b82f6";
-          ctx.fillRect(cx, y + 6, 2, rowH - 12);
+          drawCursorVert(ctx, cx, y + 6, rowH - 12);
         }
         break;
       }

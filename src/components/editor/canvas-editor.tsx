@@ -206,11 +206,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   // カーソル点滅
   useEffect(() => {
-    const interval = setInterval(() => setCursorVisible((v) => !v), 530);
+    const interval = setInterval(() => setCursorVisible((v) => !v), 500);
     return () => clearInterval(interval);
   }, []);
-  // カーソル移動時にリセット
   useEffect(() => { setCursorVisible(true); }, [cursor]);
+
+  // textareaに現在フィールドのテキストを同期（ネイティブコピペ対応）
+  useEffect(() => {
+    const ta = inputRef.current;
+    if (!ta) return;
+    const text = getFieldText(cursor);
+    ta.value = text;
+    ta.setSelectionRange(0, text.length); // 全選択状態にしてCmd+Cで全文コピー
+  }, [cursor, doc]); // eslint-disable-line
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -260,35 +268,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "z") { e.preventDefault(); undo(); return; }
 
-      // コピー
-      if (mod && e.key === "c") {
-        const text = getFieldText(cursor);
-        if (text) navigator.clipboard?.writeText(text);
-        return;
-      }
-
-      // ペースト
-      if (mod && e.key === "v") {
-        e.preventDefault();
-        navigator.clipboard?.readText().then((clipText) => {
-          if (!clipText) return;
-          pushHistory();
-          const { blockIndex, field, charIndex } = cursor;
-          const text = getFieldText(cursor);
-          const newText = text.slice(0, charIndex) + clipText + text.slice(charIndex);
-          updateDoc((d) => {
-            const nb = [...d.blocks];
-            const b = { ...nb[blockIndex] } as any;
-            if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
-            else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
-            else b.text = newText;
-            nb[blockIndex] = b;
-            return { ...d, blocks: nb };
-          });
-          setCursor({ ...cursor, charIndex: charIndex + clipText.length });
-        });
-        return;
-      }
+      // コピーはブラウザネイティブに任せる（textareaに全文が入っている）
+      if (mod && e.key === "c") return; // デフォルト動作を許可
+      if (mod && e.key === "a") return; // 全選択も許可
 
       // ブロック移動 (Ctrl+Shift+↑/↓)
       if (mod && e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
@@ -382,29 +364,48 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [cursor, doc, getFieldText, updateDoc, pushHistory, undo, mode, moveBlock]
   );
 
-  // テキスト入力
-  const handleInput = useCallback(
-    (e: React.FormEvent<HTMLTextAreaElement>) => {
-      const input = e.currentTarget;
-      const value = input.value;
-      if (!value) return;
-      input.value = "";
+  // テキスト入力（通常入力 + ペースト共通）
+  const applyTextChange = useCallback(
+    (newFullText: string) => {
+      const { blockIndex, field } = cursor;
+      const oldText = getFieldText(cursor);
+      if (newFullText === oldText) return;
       pushHistory();
-      const { blockIndex, field, charIndex } = cursor;
-      const text = getFieldText(cursor);
-      const newText = text.slice(0, charIndex) + value + text.slice(charIndex);
+      // カーソル位置はテキスト長の差分で計算
+      const newCharIndex = cursor.charIndex + (newFullText.length - oldText.length);
       updateDoc((d) => {
         const nb = [...d.blocks];
         const b = { ...nb[blockIndex] } as any;
-        if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
-        else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
-        else b.text = newText;
+        if (b.type === "title") { if (field === "title") b.title = newFullText; else b.author = newFullText; }
+        else if (b.type === "serif") { if (field === "speaker") b.speaker = newFullText; else b.speech = newFullText; }
+        else b.text = newFullText;
         nb[blockIndex] = b;
         return { ...d, blocks: nb };
       });
-      setCursor({ ...cursor, charIndex: charIndex + value.length });
+      setCursor({ ...cursor, charIndex: Math.max(0, newCharIndex) });
     },
-    [cursor, getFieldText, updateDoc, pushHistory]
+    [cursor, getFieldText, pushHistory, updateDoc]
+  );
+
+  const handleInput = useCallback(
+    (e: React.FormEvent<HTMLTextAreaElement>) => {
+      applyTextChange(e.currentTarget.value);
+    },
+    [applyTextChange]
+  );
+
+  // ペースト
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      e.preventDefault();
+      const pastedText = e.clipboardData.getData("text/plain");
+      if (!pastedText) return;
+      const { charIndex } = cursor;
+      const text = getFieldText(cursor);
+      const newText = text.slice(0, charIndex) + pastedText + text.slice(charIndex);
+      applyTextChange(newText);
+    },
+    [cursor, getFieldText, applyTextChange]
   );
 
   // ページ操作
@@ -465,12 +466,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
               <canvas ref={canvasRef} onClick={handleClick} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
-              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </div>
           ) : (
             <>
               <canvas ref={canvasRef} onClick={handleClick} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
-              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} className="absolute opacity-0 w-0 h-0" style={{ top: 0, left: 0 }} autoFocus />
+              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </>
           )}
         </div>
