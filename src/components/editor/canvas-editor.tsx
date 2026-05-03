@@ -836,7 +836,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           }, 0);
         }}
         className="absolute z-10"
-        style={{ top: 44, left: 8, width: 1, height: 30, opacity: 0, fontSize: 16, border: "none", outline: "none", background: "transparent", resize: "none", overflow: "hidden" }}
+        style={{ top: 44, left: 8, width: 300, height: 36, opacity: 0, fontSize: 16, border: "none", outline: "none", background: "transparent", resize: "none", overflow: "hidden", color: "transparent", caretColor: "transparent" }}
         autoFocus />
 
       {/* Canvas + Side Panel */}
