@@ -210,21 +210,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // textareaに選択テキストを同期（ネイティブコピペ対応）
-  useEffect(() => {
-    const ta = inputRef.current;
-    if (!ta) return;
-    const text = getFieldText(cursor);
-    if (selAnchor && selAnchor.blockIndex === cursor.blockIndex && selAnchor.field === cursor.field) {
-      // 範囲選択中：選択部分だけをtextareaにセット
-      const start = Math.min(selAnchor.charIndex, cursor.charIndex);
-      const end = Math.max(selAnchor.charIndex, cursor.charIndex);
-      ta.value = text.slice(start, end);
-    } else {
-      ta.value = text;
-    }
-    ta.select();
-  }, [cursor, selAnchor, doc]); // eslint-disable-line
+  // (getSelectionText and copy handler are below getFieldText)
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -244,6 +230,30 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     },
     [doc]
   );
+
+  // コピー対象テキストを取得
+  const getSelectionText = useCallback(() => {
+    const text = getFieldText(cursor);
+    if (selAnchor && selAnchor.blockIndex === cursor.blockIndex && selAnchor.field === cursor.field) {
+      const start = Math.min(selAnchor.charIndex, cursor.charIndex);
+      const end = Math.max(selAnchor.charIndex, cursor.charIndex);
+      return text.slice(start, end);
+    }
+    return text;
+  }, [cursor, selAnchor, getFieldText]);
+
+  // document-levelのコピーイベントをinterceptしてテキストを強制コピー
+  useEffect(() => {
+    const handleCopy = (e: ClipboardEvent) => {
+      const text = getSelectionText();
+      if (text) {
+        e.preventDefault();
+        e.clipboardData?.setData("text/plain", text);
+      }
+    };
+    document.addEventListener("copy", handleCopy);
+    return () => document.removeEventListener("copy", handleCopy);
+  }, [getSelectionText]);
 
   // マウス座標 → カーソル位置
   const hitTest = useCallback(
@@ -313,8 +323,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "z") { e.preventDefault(); undo(); return; }
 
-      // コピーはブラウザネイティブに任せる（textareaに選択テキストが入っている）
-      if (mod && e.key === "c") return;
+      // コピー: document.execCommandでコピーイベントを発火 → handleCopyでintercept
+      if (mod && e.key === "c") {
+        e.preventDefault();
+        document.execCommand("copy");
+        return;
+      }
 
       // 全選択: フィールド全体を選択
       if (mod && e.key === "a") {
