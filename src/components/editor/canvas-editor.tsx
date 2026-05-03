@@ -13,12 +13,18 @@ import { BlockPanel } from "./block-panel";
 import {
   type ColLayout,
   type SelectionRange,
+  type ScriptDragState,
   computeColumns,
   drawScript,
   hitTestScript,
   getMaxPage,
+  findScriptDropIndex,
   PAGE_W,
   PAGE_H,
+  COL_W,
+  M_TOP,
+  HEADER_H,
+  SEP_Y,
 } from "@/lib/editor/draw-script";
 import { drawHorizontal, hitTestHorizontal, findDropIndex, H_DRAG_HANDLE_W, type BlockDragState } from "@/lib/editor/draw-horizontal";
 import { savePlayBody } from "@/actions/plays";
@@ -215,7 +221,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   // ブロックドラッグ状態
   const [blockDrag, setBlockDrag] = useState<BlockDragState>(null);
-  const blockDragRef = useRef<{ index: number; startY: number } | null>(null);
+  const [scriptDrag, setScriptDrag] = useState<ScriptDragState>(null);
+  const blockDragRef = useRef<{ index: number; mode: "h" | "v" } | null>(null);
 
   // 描画
   const redraw = useCallback(() => {
@@ -234,14 +241,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage, sel);
+      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
       drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag);
     }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag]);
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
@@ -317,18 +324,31 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       if (e.button === 2) return;
       setContextMenu(null);
 
-      // 横書きモードでハンドル領域をクリック → ブロックドラッグ開始
-      if (mode === "horizontal") {
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const rect = canvas.getBoundingClientRect();
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+
+        if (mode === "horizontal") {
+          // 横書き: 左端のハンドル領域
           const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
           if (mx < H_DRAG_HANDLE_W) {
             const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
-            const pos = hitTestHorizontal(doc, mx + 40, my); // オフセットして行を特定
+            const pos = hitTestHorizontal(doc, mx + 40, my);
             if (pos) {
-              blockDragRef.current = { index: pos.blockIndex, startY: my };
+              blockDragRef.current = { index: pos.blockIndex, mode: "h" };
               setBlockDrag({ draggingIndex: pos.blockIndex, mouseY: my });
+              return;
+            }
+          }
+        } else {
+          // 縦書き: ヘッダー領域（話者名の上のドット）をクリック
+          const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+          const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
+          if (my < M_TOP + HEADER_H + 12) {
+            const pos = hitTestScript(doc, colsRef.current, mx, my, currentPage);
+            if (pos) {
+              blockDragRef.current = { index: pos.blockIndex, mode: "v" };
+              setScriptDrag({ draggingIndex: pos.blockIndex, mouseX: mx });
               return;
             }
           }
@@ -358,8 +378,13 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         const canvas = canvasRef.current;
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
-          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
-          setBlockDrag({ draggingIndex: blockDragRef.current.index, mouseY: my });
+          if (blockDragRef.current.mode === "h") {
+            const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+            setBlockDrag({ draggingIndex: blockDragRef.current.index, mouseY: my });
+          } else {
+            const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+            setScriptDrag({ draggingIndex: blockDragRef.current.index, mouseX: mx });
+          }
         }
         return;
       }
@@ -428,20 +453,29 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       // ブロックドロップ
-      if (blockDragRef.current && blockDrag) {
+      if (blockDragRef.current) {
         const canvas = canvasRef.current;
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
-          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
-          const dropIdx = findDropIndex(doc, my);
           const fromIdx = blockDragRef.current.index;
-          if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
-            const toIdx = dropIdx > fromIdx ? dropIdx - 1 : dropIdx;
-            reorderBlock(fromIdx, toIdx);
+
+          if (blockDragRef.current.mode === "h" && blockDrag) {
+            const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+            const dropIdx = findDropIndex(doc, my);
+            if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
+              reorderBlock(fromIdx, dropIdx > fromIdx ? dropIdx - 1 : dropIdx);
+            }
+          } else if (blockDragRef.current.mode === "v" && scriptDrag) {
+            const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+            const dropIdx = findScriptDropIndex(colsRef.current, mx, currentPage);
+            if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
+              reorderBlock(fromIdx, dropIdx > fromIdx ? dropIdx - 1 : dropIdx);
+            }
           }
         }
         blockDragRef.current = null;
         setBlockDrag(null);
+        setScriptDrag(null);
         return;
       }
 
@@ -452,7 +486,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         setSelAnchor(null);
       }
     },
-    [selAnchor, cursor, blockDrag, containerSize, doc, reorderBlock]
+    [selAnchor, cursor, blockDrag, scriptDrag, containerSize, doc, reorderBlock, currentPage]
   );
 
   // キーボード

@@ -47,7 +47,7 @@ const BODY_TOP = SEP_Y + 6; // 本文開始Y
 const BODY_H = PAGE_H - M_BOTTOM - BODY_TOP;
 const CHAR_H = Math.floor(BODY_H / CHARS_PER_COL); // 1文字の送りピッチ
 
-export { PAGE_W, PAGE_H };
+export { PAGE_W, PAGE_H, COL_W, M_TOP, HEADER_H, SEP_Y };
 
 /** カーソル描画（横線タイプ、縦書き用） */
 function drawCursorLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
@@ -181,13 +181,19 @@ export type SelectionRange = {
 } | null;
 
 // ─── 描画 ───
+export type ScriptDragState = {
+  draggingIndex: number;
+  mouseX: number;
+} | null;
+
 export function drawScript(
   ctx: CanvasRenderingContext2D,
   doc: PlayDocument,
   cols: ColLayout[],
   cursor: CursorPosition | null,
   currentPage: number,
-  selection: SelectionRange = null
+  selection: SelectionRange = null,
+  blockDrag: ScriptDragState = null
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const bodyFont = fontStr(FONT_SIZE, cfg);
@@ -345,7 +351,49 @@ export function drawScript(
         drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + li * cH, fs + 2);
       }
     }
+
+    // ドラッグハンドル（各ブロックの最初の列、ヘッダー領域にドット）
+    if (isFirst && !col.special) {
+      ctx.fillStyle = "#ccc";
+      const hx = col.x;
+      const hy = M_TOP + HEADER_H + 4;
+      for (let r = 0; r < 2; r++) {
+        for (let c = -1; c <= 1; c++) {
+          ctx.beginPath();
+          ctx.arc(hx + c * 4, hy + r * 4, 1.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
   }
+
+  // ─── ドラッグインジケーター ───
+  if (blockDrag) {
+    const dropIdx = findScriptDropIndex(cols, blockDrag.mouseX, currentPage);
+    // ドロップ先の縦線
+    const dropCol = cols.find((c) => c.page === currentPage && c.blockIndex === dropIdx);
+    const dropX = dropCol ? dropCol.x + COL_W / 2 + 2 : M_LEFT;
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(dropX, M_TOP + HEADER_H);
+    ctx.lineTo(dropX, PAGE_H - M_BOTTOM);
+    ctx.stroke();
+  }
+}
+
+/** 縦書きモード: ドロップ先インデックス */
+export function findScriptDropIndex(cols: ColLayout[], mouseX: number, currentPage: number): number {
+  // マウスX位置より右にある最初のブロックの前に挿入
+  let lastBI = -1;
+  for (const col of cols) {
+    if (col.page !== currentPage) continue;
+    if (col.special) continue;
+    if (col.blockIndex === lastBI) continue;
+    lastBI = col.blockIndex;
+    if (mouseX > col.x) return col.blockIndex;
+  }
+  return lastBI >= 0 ? lastBI + 1 : 0;
 }
 
 // ─── ヒットテスト ───
