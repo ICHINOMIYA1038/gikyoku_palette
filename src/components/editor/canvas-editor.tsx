@@ -809,13 +809,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
+      {/* 入力用textarea — IME対応のため画面内に半透明配置 */}
       <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
         onCompositionStart={() => { isComposingRef.current = true; setComposingText(""); }}
         onCompositionUpdate={(e) => { setComposingText(e.data || ""); }}
         onCompositionEnd={() => { isComposingRef.current = false; setComposingText(""); }}
-        className="absolute z-10"
-        style={{ top: 44, left: 8, width: 300, height: 36, opacity: 0, fontSize: 16, border: "none", outline: "none", background: "transparent", resize: "none", overflow: "hidden", color: "transparent", caretColor: "transparent" }}
+        className="absolute"
+        style={{ top: 44, left: 0, width: 320, height: 40, fontSize: 16, padding: 8,
+          color: "#333", background: "#fff", border: "1px solid #ddd", borderRadius: 6,
+          outline: "none", resize: "none", zIndex: 20,
+          // IME変換中のみ表示、それ以外は隠す
+          opacity: composingText ? 1 : 0,
+          pointerEvents: composingText ? "auto" : "none",
+        }}
         autoFocus />
 
       {/* Canvas + Side Panel */}
