@@ -328,9 +328,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
-      e.preventDefault(); // Canvasへのフォーカス移動を防止
       setContextMenu(null);
-      inputRef.current?.focus(); // textareaにフォーカスを当てる
+      // Canvasクリック後にtextareaにフォーカスを戻す
+      setTimeout(() => inputRef.current?.focus(), 0);
 
       const canvas = canvasRef.current;
       if (canvas) {
@@ -809,20 +809,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 入力用textarea — IME対応のため画面内に半透明配置 */}
-      <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
-        onCompositionStart={() => { isComposingRef.current = true; setComposingText(""); }}
-        onCompositionUpdate={(e) => { setComposingText(e.data || ""); }}
-        onCompositionEnd={() => { isComposingRef.current = false; setComposingText(""); }}
-        className="absolute"
-        style={{ top: 44, left: 0, width: 320, height: 40, fontSize: 16, padding: 8,
-          color: "#333", background: "#fff", border: "1px solid #ddd", borderRadius: 6,
-          outline: "none", resize: "none", zIndex: 20,
-          // IME変換中のみ表示、それ以外は隠す
-          opacity: composingText ? 1 : 0,
-          pointerEvents: composingText ? "auto" : "none",
-        }}
-        autoFocus />
+      {/* 入力用textarea — 常に表示してIMEを確実に動作させる */}
+      <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
+        <span className="text-xs text-gray-400">入力:</span>
+        <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
+          onCompositionStart={() => { isComposingRef.current = true; setComposingText(""); }}
+          onCompositionUpdate={(e) => { setComposingText(e.data || ""); }}
+          onCompositionEnd={() => { isComposingRef.current = false; setComposingText(""); }}
+          rows={1}
+          placeholder="ここに入力..."
+          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded outline-none focus:border-blue-400 resize-none bg-white"
+          style={{ maxWidth: 400 }}
+          autoFocus />
+      </div>
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
