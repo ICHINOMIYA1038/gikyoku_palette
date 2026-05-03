@@ -28,6 +28,7 @@ import {
 } from "@/lib/editor/draw-script";
 import { drawHorizontal, hitTestHorizontal, findDropIndex, H_DRAG_HANDLE_W, type BlockDragState } from "@/lib/editor/draw-horizontal";
 import { savePlayBody } from "@/actions/plays";
+import { CURSOR_PEN, CURSOR_GRAB, CURSOR_GRABBING } from "./cursors";
 
 export type EditorMode = "horizontal" | "script";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -370,11 +371,15 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [hitTest, cursor, selAnchor, mode, containerSize, doc]
   );
 
-  // mousemove: テキスト選択 or ブロックドラッグ
+  // カーソルスタイル
+  const [canvasCursor, setCanvasCursor] = useState(CURSOR_PEN);
+
+  // mousemove: テキスト選択 or ブロックドラッグ + カーソル切替
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       // ブロックドラッグ中
       if (blockDragRef.current) {
+        setCanvasCursor(CURSOR_GRABBING);
         const canvas = canvasRef.current;
         if (canvas) {
           const rect = canvas.getBoundingClientRect();
@@ -389,7 +394,21 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         return;
       }
       // テキスト選択
-      if (!isDraggingRef.current) return;
+      if (!isDraggingRef.current) {
+        // カーソル形状の切替（ハンドル領域 vs テキスト領域）
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          if (mode === "horizontal") {
+            const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
+            setCanvasCursor(mx < H_DRAG_HANDLE_W ? CURSOR_GRAB : CURSOR_PEN);
+          } else {
+            const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
+            setCanvasCursor(my < M_TOP + HEADER_H + 12 ? CURSOR_GRAB : CURSOR_PEN);
+          }
+        }
+        return;
+      }
       const pos = hitTest(e);
       if (pos && selAnchor && pos.blockIndex === selAnchor.blockIndex && pos.field === selAnchor.field) {
         setCursor(pos);
@@ -476,6 +495,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         blockDragRef.current = null;
         setBlockDrag(null);
         setScriptDrag(null);
+        setCanvasCursor(CURSOR_PEN);
         return;
       }
 
@@ -742,12 +762,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="" style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
               <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </div>
           ) : (
             <>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
               <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </>
           )}
