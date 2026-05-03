@@ -253,9 +253,18 @@ export function drawScript(
 
     // ─── 特殊列 ───
     if (col.special === "title") {
-      ctx.font = fontStr(FONT_SIZE * 1.6, cfg, true);
-      ctx.fillStyle = "#111";
       const fs = FONT_SIZE * 1.6;
+      if (col.chars.length === 0 && isActive) {
+        ctx.font = fontStr(fs * 0.6, cfg);
+        ctx.fillStyle = "#ccc";
+        const ph = "タイトル";
+        for (let i = 0; i < ph.length; i++) {
+          const cw = ctx.measureText(ph[i]).width;
+          ctx.fillText(ph[i], col.x - cw / 2, BODY_TOP + i * (fs * 0.6 + 4));
+        }
+      }
+      ctx.font = fontStr(fs, cfg, true);
+      ctx.fillStyle = "#111";
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
         const cw = ctx.measureText(ch).width;
@@ -271,8 +280,16 @@ export function drawScript(
       const lineH = fs + 3;
       ctx.font = fontStr(fs, cfg);
       ctx.fillStyle = "#555";
-      // 作者名はページ下半分から開始（参考PDFに合わせる）
       const offsetY = BODY_H * 0.45;
+      if (col.chars.length === 0 && isActive) {
+        ctx.fillStyle = "#ccc";
+        const ph = "作者名";
+        for (let i = 0; i < ph.length; i++) {
+          const cw = ctx.measureText(ph[i]).width;
+          ctx.fillText(ph[i], col.x - cw / 2, BODY_TOP + offsetY + i * lineH);
+        }
+        ctx.fillStyle = "#555";
+      }
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
         const cw = ctx.measureText(ch).width;
@@ -356,6 +373,26 @@ export function drawScript(
     }
 
     // 本文テキスト描画
+    ctx.font = isTg ? fontStr(TOGAKI_FONT_SIZE, cfg) : bodyFont;
+    if (col.chars.length === 0 && isActive && col.startCharIndex === 0) {
+      // 空フィールドのプレースホルダー
+      const placeholders: Record<string, string> = {
+        serif: "セリフ",
+        togaki: "ト書き",
+        setting: "舞台設定",
+        sceneHeading: "場面",
+        endMark: "おわり",
+      };
+      const ph = placeholders[block.type] || "";
+      if (ph) {
+        ctx.font = fontStr(fs * 0.75, cfg);
+        ctx.fillStyle = "#ccc";
+        for (let i = 0; i < ph.length; i++) {
+          const cw = ctx.measureText(ph[i]).width;
+          ctx.fillText(ph[i], col.x - fs / 2 + (fs - cw) / 2, BODY_TOP + indent + i * (fs * 0.75 + 3));
+        }
+      }
+    }
     ctx.font = isTg ? fontStr(TOGAKI_FONT_SIZE, cfg) : bodyFont;
     ctx.fillStyle = isTg ? "#333" : "#1a1a1a";
     for (let i = 0; i < col.chars.length; i++) {

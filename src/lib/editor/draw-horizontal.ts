@@ -115,12 +115,14 @@ export function drawHorizontal(
 
     switch (block.type) {
       case "title": {
-        // タイトル（大きめ太字）
+        // タイトル
         ctx.font = fontStr(fontSize * 1.5, cfg, true);
+        if (!block.title && isActive) { ctx.fillStyle = "#ccc"; ctx.fillText("タイトル", H_MARGIN.left, cy - 2); }
         ctx.fillStyle = "#111";
         ctx.fillText(block.title || "", H_MARGIN.left, cy - 2);
         // 作者名
         ctx.font = fontStr(fontSize * 0.75, cfg);
+        if (!block.author && isActive) { ctx.fillStyle = "#ccc"; ctx.fillText("作者名", H_MARGIN.left + (ctx.measureText(block.title || "").width || 80) + 24, cy + 2); }
         ctx.fillStyle = "#666";
         const titleW = ctx.measureText(block.title || "").width;
         ctx.fillText(block.author || "", H_MARGIN.left + titleW + 24, cy + 2);
@@ -173,6 +175,7 @@ export function drawHorizontal(
           ctx.fillRect(0, y, w, rowH);
         }
         ctx.font = fontStr(fontSize * 0.85, cfg, false, true);
+        if (!block.text && isActive) { ctx.fillStyle = "#ccc"; ctx.fillText("舞台設定", H_MARGIN.left + 12, cy); }
         ctx.fillStyle = "#777";
         ctx.fillText(block.text || "", H_MARGIN.left + 12, cy);
 
@@ -191,6 +194,7 @@ export function drawHorizontal(
           ctx.fillRect(0, y, w, rowH);
         }
         ctx.font = fontStr(fontSize * 1.1, cfg, true);
+        if (!block.text && isActive) { ctx.fillStyle = "#ccc"; ctx.fillText("場面", H_MARGIN.left, cy); }
         ctx.fillStyle = "#111";
         ctx.fillText(block.text || "", H_MARGIN.left, cy);
         // 太い下線
@@ -212,6 +216,10 @@ export function drawHorizontal(
       case "serif": {
         // 話者名
         ctx.font = fontStr(speakerFontSize, cfg, true);
+        if (!block.speaker && isActive) {
+          ctx.fillStyle = "#ccc";
+          ctx.fillText("名前", H_MARGIN.left, cy);
+        }
         ctx.fillStyle = "#333";
         ctx.fillText(block.speaker || "", H_MARGIN.left, cy);
         // 感情指示
@@ -237,6 +245,10 @@ export function drawHorizontal(
           ctx.fillRect(H_SPEECH_LEFT + hlStart, y + 4, hlEnd - hlStart, rowH - 8);
         }
         // セリフテキスト
+        if (!block.speech && isActive) {
+          ctx.fillStyle = "#ccc";
+          ctx.fillText("セリフ", H_SPEECH_LEFT, cy);
+        }
         ctx.fillStyle = "#1a1a1a";
         ctx.fillText(block.speech || "", H_SPEECH_LEFT, cy);
         // 行の下区切り
@@ -273,6 +285,7 @@ export function drawHorizontal(
         ctx.fillText("ト書き", H_MARGIN.left, cy);
         // テキスト
         ctx.font = fontStr(fontSize * 0.9, cfg, false, true);
+        if (!block.text && isActive) { ctx.fillStyle = "#ccc"; ctx.fillText("ト書き", H_SPEECH_LEFT, cy); }
         ctx.fillStyle = "#666";
         ctx.fillText(block.text || "", H_SPEECH_LEFT, cy);
         // 下線
