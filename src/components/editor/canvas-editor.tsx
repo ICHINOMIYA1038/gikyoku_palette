@@ -245,37 +245,66 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [doc]
   );
 
-  // クリック
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // マウス座標 → カーソル位置
+  const hitTest = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>): CursorPosition | null => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       const cw = mode === "script" ? PAGE_W : containerSize.w;
       const ch = mode === "script" ? PAGE_H : containerSize.h;
       const mx = (e.clientX - rect.left) * (cw / rect.width);
       const my = (e.clientY - rect.top) * (ch / rect.height);
-
-      let newCursor: CursorPosition | null;
-      if (mode === "script") {
-        newCursor = hitTestScript(doc, colsRef.current, mx, my, currentPage);
-      } else {
-        newCursor = hitTestHorizontal(doc, mx, my);
-      }
-      if (newCursor) {
-        if (e.shiftKey && cursor.blockIndex === newCursor.blockIndex && cursor.field === newCursor.field) {
-          // Shift+クリック: 選択範囲を拡張
-          if (!selAnchor) setSelAnchor({ ...cursor });
-          setCursor(newCursor);
-        } else {
-          // 通常クリック: 選択解除
-          setSelAnchor(null);
-          setCursor(newCursor);
-        }
-      }
-      inputRef.current?.focus();
+      return mode === "script"
+        ? hitTestScript(doc, colsRef.current, mx, my, currentPage)
+        : hitTestHorizontal(doc, mx, my);
     },
     [doc, containerSize, mode, currentPage]
+  );
+
+  const isDraggingRef = useRef(false);
+
+  // mousedown: カーソル設置 + ドラッグ開始
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const pos = hitTest(e);
+      if (!pos) return;
+      if (e.shiftKey && cursor.blockIndex === pos.blockIndex && cursor.field === pos.field) {
+        if (!selAnchor) setSelAnchor({ ...cursor });
+        setCursor(pos);
+      } else {
+        setSelAnchor({ ...pos }); // ドラッグ開始地点
+        setCursor(pos);
+      }
+      isDraggingRef.current = true;
+      inputRef.current?.focus();
+    },
+    [hitTest, cursor, selAnchor]
+  );
+
+  // mousemove: ドラッグ中に選択範囲を拡張
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!isDraggingRef.current) return;
+      const pos = hitTest(e);
+      if (pos && selAnchor && pos.blockIndex === selAnchor.blockIndex && pos.field === selAnchor.field) {
+        setCursor(pos);
+      }
+    },
+    [hitTest, selAnchor]
+  );
+
+  // mouseup: ドラッグ終了、選択が0幅なら解除
+  const handleMouseUp = useCallback(
+    () => {
+      isDraggingRef.current = false;
+      if (selAnchor && selAnchor.blockIndex === cursor.blockIndex &&
+          selAnchor.field === cursor.field &&
+          selAnchor.charIndex === cursor.charIndex) {
+        setSelAnchor(null); // 選択なし（同じ位置でクリック）
+      }
+    },
+    [selAnchor, cursor]
   );
 
   // キーボード
@@ -527,12 +556,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-              <canvas ref={canvasRef} onClick={handleClick} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} className="cursor-text" style={{ width: PAGE_W, height: PAGE_H }} />
               <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </div>
           ) : (
             <>
-              <canvas ref={canvasRef} onClick={handleClick} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%" }} />
               <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
             </>
           )}
