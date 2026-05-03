@@ -381,6 +381,8 @@ export function hitTestHorizontal(
           return { blockIndex: bi, field: isTitle ? "title" : "author", charIndex: isTitle ? block.title.length : block.author.length };
         }
         case "serif":
+          // speakerが空なら、どこをクリックしてもspeakerに移動
+          if (!block.speaker) return { blockIndex: bi, field: "speaker", charIndex: 0 };
           if (mx < H_SEP_X) return { blockIndex: bi, field: "speaker", charIndex: block.speaker.length };
           return { blockIndex: bi, field: "speech", charIndex: block.speech.length };
         case "castList":

@@ -493,6 +493,11 @@ export function hitTestScript(
     return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, idx) };
   }
 
+  // セリフブロックでspeakerが空なら、本文エリアクリックでもspeakerに移動
+  if (block.type === "serif" && !block.speaker) {
+    return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: 0 };
+  }
+
   // ト書きはインデントとフォントサイズが異なる
   const isTg = block.type === "togaki" || block.type === "setting";
   const tCharH = isTg ? (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)) : CHAR_H;
