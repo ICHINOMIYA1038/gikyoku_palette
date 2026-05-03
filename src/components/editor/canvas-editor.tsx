@@ -275,16 +275,18 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const isDraggingRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // mousedown: カーソル設置 + ドラッグ開始
+  // mousedown: カーソル設置 + ドラッグ開始（右クリック時は選択を維持）
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (e.button === 2) return; // 右クリックは選択を維持
+      setContextMenu(null);
       const pos = hitTest(e);
       if (!pos) return;
       if (e.shiftKey && cursor.blockIndex === pos.blockIndex && cursor.field === pos.field) {
         if (!selAnchor) setSelAnchor({ ...cursor });
         setCursor(pos);
       } else {
-        setSelAnchor({ ...pos }); // ドラッグ開始地点
+        setSelAnchor({ ...pos });
         setCursor(pos);
       }
       isDraggingRef.current = true;
