@@ -298,22 +298,37 @@ export function drawScript(
     // ─── 話者名（serif最初の列のみ） ───
     if (isFirst && block.type === "serif") {
       const speaker = block.speaker || "";
-      // 話者名が長い場合はフォントを縮小して収める
       const spFontSize = speaker.length > SPEAKER_MAX_CHARS
         ? Math.floor(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS / speaker.length)
         : SPEAKER_FONT_SIZE;
-      ctx.font = fontStr(spFontSize, cfg, true);
-      ctx.fillStyle = "#222";
       const spCharH = spFontSize + 2;
       const spBottom = SEP_Y - 3;
-      const spTop = spBottom - speaker.length * spCharH;
-      for (let i = 0; i < speaker.length; i++) {
-        const ch = speaker[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spTop + i * spCharH);
-      }
-      if (isActive && cursor?.field === "speaker") {
-        drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2);
+
+      if (speaker.length === 0) {
+        // 空の話者名: プレースホルダー + カーソル
+        if (isActive && cursor?.field === "speaker") {
+          ctx.font = fontStr(SPEAKER_FONT_SIZE * 0.8, cfg);
+          ctx.fillStyle = "#bbb";
+          const ph = "名前";
+          const phTop = spBottom - ph.length * (SPEAKER_FONT_SIZE * 0.8 + 2);
+          for (let i = 0; i < ph.length; i++) {
+            const cw = ctx.measureText(ph[i]).width;
+            ctx.fillText(ph[i], col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, phTop + i * (SPEAKER_FONT_SIZE * 0.8 + 2));
+          }
+          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spBottom, FONT_SIZE + 2);
+        }
+      } else {
+        ctx.font = fontStr(spFontSize, cfg, true);
+        ctx.fillStyle = "#222";
+        const spTop = spBottom - speaker.length * spCharH;
+        for (let i = 0; i < speaker.length; i++) {
+          const ch = speaker[i];
+          const cw = ctx.measureText(ch).width;
+          ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spTop + i * spCharH);
+        }
+        if (isActive && cursor?.field === "speaker") {
+          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2);
+        }
       }
     }
 

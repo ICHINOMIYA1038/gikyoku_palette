@@ -854,7 +854,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
 function ModeBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" tabIndex={-1} onClick={onClick}
+    <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={onClick}
       className={`px-2.5 py-1 text-xs rounded transition-colors ${active ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
       {label}
     </button>
@@ -863,7 +863,7 @@ function ModeBtn({ label, active, onClick }: { label: string; active: boolean; o
 
 function ToolBtn({ label, shortcut, onClick }: { label: string; shortcut?: string; onClick: () => void }) {
   return (
-    <button type="button" tabIndex={-1} onClick={onClick} title={shortcut ? `${label} (${shortcut})` : label}
+    <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={onClick} title={shortcut ? `${label} (${shortcut})` : label}
       className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">
       {label}
       {shortcut && <kbd className="text-[10px] text-gray-400 bg-gray-50 border border-gray-200 rounded px-1">{shortcut}</kbd>}
