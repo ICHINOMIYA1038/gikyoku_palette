@@ -220,8 +220,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     1 // 1倍以上にはしない
   );
 
-  // IME変換中テキスト
-  const [composingText, setComposingText] = useState("");
   // ブロックドラッグ状態
   const [blockDrag, setBlockDrag] = useState<BlockDragState>(null);
   const [scriptDrag, setScriptDrag] = useState<ScriptDragState>(null);
@@ -244,14 +242,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag, composingText);
+      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, composingText);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag);
     }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag, composingText]);
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
@@ -321,16 +319,16 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<CursorPosition | null>(null);
-  const isComposingRef = useRef(false);
+  const isComposingRef = useRef(false); // IME変換中フラグ
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
+      e.preventDefault(); // Canvasへのフォーカス移動を防止
       setContextMenu(null);
-      // Canvasクリック後にtextareaにフォーカスを戻す
-      setTimeout(() => inputRef.current?.focus(), 0);
+      inputRef.current?.focus(); // textareaにフォーカスを当てる
 
       const canvas = canvasRef.current;
       if (canvas) {
@@ -527,9 +525,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   // キーボード
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // IME変換中はキー操作を無視（Enter/Backspace等がIMEに使われる）
-      if (isComposingRef.current || e.nativeEvent.isComposing || e.key === "Process") return;
-
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "z") { e.preventDefault(); undo(); return; }
 
@@ -704,20 +699,13 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLTextAreaElement>) => {
-      const nativeEvent = e.nativeEvent as InputEvent;
-      const composing = isComposingRef.current || nativeEvent?.isComposing;
-
-      // IME変換中: textareaをクリアせず表示だけ更新
-      if (composing) {
-        setComposingText(e.currentTarget.value);
-        return;
-      }
+      // IME変換中は確定まで処理しない
+      if (isComposingRef.current) return;
 
       const input = e.currentTarget;
       const value = input.value;
       if (!value) return;
       input.value = "";
-      setComposingText("");
 
       const delResult = deleteSelection();
       const { blockIndex, field } = cursor;
@@ -809,19 +797,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 入力用textarea — 常に表示してIMEを確実に動作させる */}
-      <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
-        <span className="text-xs text-gray-400">入力:</span>
-        <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
-          onCompositionStart={() => { isComposingRef.current = true; setComposingText(""); }}
-          onCompositionUpdate={(e) => { setComposingText(e.data || ""); }}
-          onCompositionEnd={() => { isComposingRef.current = false; setComposingText(""); }}
-          rows={1}
-          placeholder="ここに入力..."
-          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded outline-none focus:border-blue-400 resize-none bg-white"
-          style={{ maxWidth: 400 }}
-          autoFocus />
-      </div>
+      {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
+      <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
+        onCompositionStart={() => { isComposingRef.current = true; }}
+        onCompositionEnd={(e) => { isComposingRef.current = false; handleInput(e as any); }}
+        className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
