@@ -831,7 +831,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
             }
           }, 0);
         }}
-        className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
+        className="absolute z-10"
+        style={{ top: 44, left: 8, width: 1, height: 30, opacity: 0, fontSize: 16, border: "none", outline: "none", background: "transparent", resize: "none", overflow: "hidden" }}
+        autoFocus />
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
