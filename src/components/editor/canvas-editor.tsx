@@ -757,19 +757,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
+      {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
+      <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
+        className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
+
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
         <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="" style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
-              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
             </div>
           ) : (
-            <>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="absolute inset-0 cursor-text" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
-              <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste} className="absolute opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
-            </>
+            <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="absolute inset-0" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
           )}
         </div>
         {/* コンテキストメニュー */}
