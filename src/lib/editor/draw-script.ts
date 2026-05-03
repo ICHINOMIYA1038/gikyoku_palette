@@ -207,7 +207,7 @@ export function drawScript(
   // ヘッダー
   if (cfg.showHeader) {
     const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
-    const headerText = cfg.headerText || (titleBlock ? `『${titleBlock.title}』${titleBlock.author}` : "");
+    const headerText = cfg.headerText || (titleBlock?.title ? `『${titleBlock.title}』${titleBlock.author || ""}` : "");
     if (headerText) {
       ctx.font = fontStr(11, cfg);
       ctx.fillStyle = "#888";
