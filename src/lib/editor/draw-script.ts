@@ -426,7 +426,11 @@ export function hitTestScript(
   if (bestCol.special === "castLabel" || bestCol.special === "castChar") return null;
 
   if (my < SEP_Y && block.type === "serif") {
+    // 空の話者名でも区切り線の上をクリックしたらspeakerフィールドに移動
     const speaker = block.speaker || "";
+    if (speaker.length === 0) {
+      return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: 0 };
+    }
     const spFontSize = speaker.length > SPEAKER_MAX_CHARS
       ? Math.floor(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS / speaker.length)
       : SPEAKER_FONT_SIZE;
