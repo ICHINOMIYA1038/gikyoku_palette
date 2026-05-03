@@ -318,6 +318,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   );
 
   const isDraggingRef = useRef(false);
+  const dragAnchorRef = useRef<CursorPosition | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
@@ -360,11 +361,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const pos = hitTest(e);
       if (!pos) return;
       if (e.shiftKey && cursor.blockIndex === pos.blockIndex && cursor.field === pos.field) {
+        // Shift+クリック: 選択範囲を拡張
         if (!selAnchor) setSelAnchor({ ...cursor });
         setCursor(pos);
       } else {
-        setSelAnchor({ ...pos });
+        // 通常クリック: 選択解除、ドラッグ用のアンカーは別途管理
+        setSelAnchor(null);
         setCursor(pos);
+        dragAnchorRef.current = { ...pos }; // ドラッグ開始地点（selAnchorとは別）
       }
       isDraggingRef.current = true;
       inputRef.current?.focus();
@@ -394,7 +398,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         }
         return;
       }
-      // テキスト選択
+      // テキスト選択（ドラッグで範囲拡張）
       if (!isDraggingRef.current) {
         // カーソル形状の切替（ハンドル領域 vs テキスト領域）
         const canvas = canvasRef.current;
@@ -411,7 +415,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         return;
       }
       const pos = hitTest(e);
-      if (pos && selAnchor && pos.blockIndex === selAnchor.blockIndex && pos.field === selAnchor.field) {
+      if (pos && dragAnchorRef.current &&
+          pos.blockIndex === dragAnchorRef.current.blockIndex &&
+          pos.field === dragAnchorRef.current.field &&
+          pos.charIndex !== dragAnchorRef.current.charIndex) {
+        // ドラッグで位置が変わったら選択開始
+        setSelAnchor(dragAnchorRef.current);
+        setCursor(pos);
+      } else if (pos && selAnchor && pos.blockIndex === selAnchor.blockIndex && pos.field === selAnchor.field) {
         setCursor(pos);
       }
     },
@@ -501,9 +512,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       }
 
       isDraggingRef.current = false;
-      if (selAnchor && selAnchor.blockIndex === cursor.blockIndex &&
-          selAnchor.field === cursor.field &&
-          selAnchor.charIndex === cursor.charIndex) {
+      dragAnchorRef.current = null;
+      // ドラッグなしでクリックだけの場合は選択解除
+      if (selAnchor && selAnchor.charIndex === cursor.charIndex) {
         setSelAnchor(null);
       }
     },
