@@ -194,7 +194,8 @@ export function drawScript(
   cursor: CursorPosition | null,
   currentPage: number,
   selection: SelectionRange = null,
-  blockDrag: ScriptDragState = null
+  blockDrag: ScriptDragState = null,
+  composingText: string = ""
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const bodyFont = fontStr(FONT_SIZE, cfg);
@@ -406,6 +407,23 @@ export function drawScript(
       const li = cursor.charIndex - col.startCharIndex;
       if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
         drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + li * cH, fs + 2);
+      }
+    }
+
+    // IME変換中テキスト（下線付き仮表示）
+    if (composingText && isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
+      const li = cursor.charIndex - col.startCharIndex;
+      if (li >= 0 && li <= col.chars.length) {
+        ctx.font = bodyFont;
+        ctx.fillStyle = "#2563eb";
+        for (let ci = 0; ci < composingText.length; ci++) {
+          const ch = composingText[ci];
+          const cw = ctx.measureText(ch).width;
+          const cy = BODY_TOP + indent + (li + ci) * cH;
+          ctx.fillText(ch, col.x - fs / 2 + (fs - cw) / 2, cy);
+          // 下線
+          ctx.fillRect(col.x - fs / 2, cy + cH - 2, fs, 1);
+        }
       }
     }
 

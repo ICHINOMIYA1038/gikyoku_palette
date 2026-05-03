@@ -242,14 +242,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag);
+      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag, composingText);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, composingText);
     }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag]);
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag, composingText]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
@@ -319,7 +319,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<CursorPosition | null>(null);
-  const isComposingRef = useRef(false); // IME変換中フラグ
+  const isComposingRef = useRef(false);
+  const [composingText, setComposingText] = useState(""); // IME変換中の仮テキスト
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
@@ -799,9 +800,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
       <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
-        onCompositionStart={() => { isComposingRef.current = true; }}
+        onCompositionStart={() => { isComposingRef.current = true; setComposingText(""); }}
+        onCompositionUpdate={(e) => { setComposingText(e.data || ""); }}
         onCompositionEnd={() => {
           isComposingRef.current = false;
+          setComposingText("");
           // ブラウザがtextareaを更新するのを待ってから処理
           setTimeout(() => {
             const ta = inputRef.current;

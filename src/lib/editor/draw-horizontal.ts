@@ -80,7 +80,8 @@ export function drawHorizontal(
   w: number,
   h: number,
   selection: SelectionRange = null,
-  blockDrag: BlockDragState = null
+  blockDrag: BlockDragState = null,
+  composingText: string = ""
 ) {
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const fontSize = cfg.fontSize * PT2PX;
@@ -263,10 +264,22 @@ export function drawHorizontal(
           if (cursor.field === "speaker") {
             ctx.font = fontStr(speakerFontSize, cfg, true);
             const cx = H_MARGIN.left + ctx.measureText((block.speaker || "").slice(0, cursor.charIndex)).width;
+            // IME変換中テキスト
+            if (composingText) {
+              ctx.fillStyle = "#2563eb";
+              ctx.fillText(composingText, cx + 2, cy);
+              ctx.fillRect(cx + 2, cy + 10, ctx.measureText(composingText).width, 1);
+            }
             drawCursorVert(ctx, cx, y + 8, rowH - 16);
           } else if (cursor.field === "speech") {
             ctx.font = fontStr(fontSize, cfg);
             const cx = H_SPEECH_LEFT + ctx.measureText((block.speech || "").slice(0, cursor.charIndex)).width;
+            // IME変換中テキスト
+            if (composingText) {
+              ctx.fillStyle = "#2563eb";
+              ctx.fillText(composingText, cx + 2, cy);
+              ctx.fillRect(cx + 2, cy + 10, ctx.measureText(composingText).width, 1);
+            }
             drawCursorVert(ctx, cx, y + 8, rowH - 16);
           }
         }
