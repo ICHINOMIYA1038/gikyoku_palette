@@ -324,8 +324,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
+      e.preventDefault(); // Canvasへのフォーカス移動を防止
       setContextMenu(null);
-      inputRef.current?.focus(); // 必ずフォーカスを当てる
+      inputRef.current?.focus(); // textareaにフォーカスを当てる
 
       const canvas = canvasRef.current;
       if (canvas) {
