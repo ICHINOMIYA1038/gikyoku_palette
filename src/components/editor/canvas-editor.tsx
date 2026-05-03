@@ -254,7 +254,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // (getSelectionText and copy handler are below getFieldText)
+  // textareaは常に空にしておく（入力はonInputで捕捉、コピーはdocument copyイベントで処理）
+  // 以前はここでtextareaに全文をセットしていたが、それが入力を壊していた
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -324,13 +325,13 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
       setContextMenu(null);
+      inputRef.current?.focus(); // 必ずフォーカスを当てる
 
       const canvas = canvasRef.current;
       if (canvas) {
         const rect = canvas.getBoundingClientRect();
 
         if (mode === "horizontal") {
-          // 横書き: 左端のハンドル領域
           const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
           if (mx < H_DRAG_HANDLE_W) {
             const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
@@ -342,7 +343,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
             }
           }
         } else {
-          // 縦書き: ヘッダー領域（話者名の上のドット）をクリック
           const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
           const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
           if (my < M_TOP + HEADER_H + 12) {
@@ -686,9 +686,34 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLTextAreaElement>) => {
-      applyTextChange(e.currentTarget.value);
+      const input = e.currentTarget;
+      const value = input.value;
+      if (!value) return;
+      input.value = ""; // 入力後クリア
+
+      // 選択範囲があれば先に削除
+      const delResult = deleteSelection();
+      const { blockIndex, field } = cursor;
+      const charIndex = delResult !== null
+        ? Math.min(cursor.charIndex, selAnchor?.charIndex ?? cursor.charIndex)
+        : cursor.charIndex;
+      const text = delResult !== null ? delResult : getFieldText(cursor);
+      const newText = text.slice(0, charIndex) + value + text.slice(charIndex);
+
+      pushHistory();
+      setSelAnchor(null);
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        const b = { ...nb[blockIndex] } as any;
+        if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
+        else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+        else b.text = newText;
+        nb[blockIndex] = b;
+        return { ...d, blocks: nb };
+      });
+      setCursor({ ...cursor, charIndex: charIndex + value.length });
     },
-    [applyTextChange]
+    [cursor, selAnchor, getFieldText, deleteSelection, pushHistory, updateDoc]
   );
 
   // ペースト
