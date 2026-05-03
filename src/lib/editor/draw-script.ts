@@ -40,7 +40,8 @@ const CHARS_PER_COL = 20;
 const CONTENT_W = PAGE_W - M_LEFT - M_RIGHT; // 本文エリア幅
 const CONTENT_H = PAGE_H - M_TOP - M_BOTTOM; // 本文エリア高さ
 const COL_W = Math.floor(CONTENT_W / COLS_PER_PAGE); // 列幅
-const SPEAKER_AREA_H = Math.round(SPEAKER_FONT_SIZE * 3 + 8); // 話者名エリア高さ
+const SPEAKER_MAX_CHARS = 5; // 話者名最大表示文字数
+const SPEAKER_AREA_H = Math.round(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS + 12); // 話者名エリア高さ
 const HEADER_H = 18;
 const SEP_Y = M_TOP + HEADER_H + SPEAKER_AREA_H; // 区切り線Y
 const BODY_TOP = SEP_Y + 6; // 本文開始Y
@@ -296,10 +297,14 @@ export function drawScript(
 
     // ─── 話者名（serif最初の列のみ） ───
     if (isFirst && block.type === "serif") {
-      ctx.font = speakerFont;
-      ctx.fillStyle = "#222";
       const speaker = block.speaker || "";
-      const spCharH = SPEAKER_FONT_SIZE + 2;
+      // 話者名が長い場合はフォントを縮小して収める
+      const spFontSize = speaker.length > SPEAKER_MAX_CHARS
+        ? Math.floor(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS / speaker.length)
+        : SPEAKER_FONT_SIZE;
+      ctx.font = fontStr(spFontSize, cfg, true);
+      ctx.fillStyle = "#222";
+      const spCharH = spFontSize + 2;
       const spBottom = SEP_Y - 3;
       const spTop = spBottom - speaker.length * spCharH;
       for (let i = 0; i < speaker.length; i++) {
@@ -422,7 +427,10 @@ export function hitTestScript(
 
   if (my < SEP_Y && block.type === "serif") {
     const speaker = block.speaker || "";
-    const spCharH = SPEAKER_FONT_SIZE + 2;
+    const spFontSize = speaker.length > SPEAKER_MAX_CHARS
+      ? Math.floor(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS / speaker.length)
+      : SPEAKER_FONT_SIZE;
+    const spCharH = spFontSize + 2;
     const spBottom = SEP_Y - 3;
     const spTop = spBottom - speaker.length * spCharH;
     const idx = Math.min(Math.floor((my - spTop) / spCharH), speaker.length);

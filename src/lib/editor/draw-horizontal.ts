@@ -51,7 +51,7 @@ const H_DRAG_HANDLE_W = 20; // ドラッグハンドル幅
 const H_MARGIN = { top: 20, left: 40, right: 40 };
 
 export { ROW_HEIGHTS, H_MARGIN, H_DRAG_HANDLE_W, computeRowPositions };
-const H_SPEAKER_W = 100;
+const H_SPEAKER_W = 140; // 長い話者名（ナレーション等）対応
 const H_SEP_X = H_MARGIN.left + H_SPEAKER_W + 12;
 const H_SPEECH_LEFT = H_SEP_X + 14;
 
