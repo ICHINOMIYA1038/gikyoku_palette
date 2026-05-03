@@ -800,7 +800,37 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
       <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
         onCompositionStart={() => { isComposingRef.current = true; }}
-        onCompositionEnd={() => { isComposingRef.current = false; }}
+        onCompositionEnd={() => {
+          isComposingRef.current = false;
+          // ブラウザがtextareaを更新するのを待ってから処理
+          setTimeout(() => {
+            const ta = inputRef.current;
+            if (ta && ta.value) {
+              const value = ta.value;
+              ta.value = "";
+              // handleInputと同じ処理を直接実行
+              const delResult = deleteSelection();
+              const { blockIndex, field } = cursor;
+              const ci = delResult !== null
+                ? Math.min(cursor.charIndex, selAnchor?.charIndex ?? cursor.charIndex)
+                : cursor.charIndex;
+              const text = delResult !== null ? delResult : getFieldText(cursor);
+              const newText = text.slice(0, ci) + value + text.slice(ci);
+              pushHistory();
+              setSelAnchor(null);
+              updateDoc((d) => {
+                const nb = [...d.blocks];
+                const b = { ...nb[blockIndex] } as any;
+                if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
+                else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+                else b.text = newText;
+                nb[blockIndex] = b;
+                return { ...d, blocks: nb };
+              });
+              setCursor((c) => ({ ...c, charIndex: ci + value.length }));
+            }
+          }, 0);
+        }}
         className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
 
       {/* Canvas + Side Panel */}
