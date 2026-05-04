@@ -302,11 +302,20 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     editContextRef.current = ec;
     (canvas as any).editContext = ec;
 
+    // IME変換状態
+    let isComposing = false;
+
     // テキスト入力イベント
     const onTextUpdate = (e: Event) => {
       const evt = e as TextUpdateEvent;
+      if (isComposing) {
+        // 変換中: 表示だけ更新、ドキュメントには挿入しない
+        setComposingText(evt.text);
+        return;
+      }
+      // 確定テキスト: ドキュメントに挿入
       insertTextAtCursor(evt.text);
-      // EditContextの内部テキストをリセット
+      // EditContextバッファをリセット
       requestAnimationFrame(() => {
         try {
           ec.updateText(0, ec.text.length, "");
@@ -316,9 +325,27 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     };
     ec.addEventListener("textupdate", onTextUpdate);
 
-    // IME変換中テキスト表示
-    ec.addEventListener("compositionstart", () => { setComposingText(""); });
-    ec.addEventListener("compositionend", () => { setComposingText(""); });
+    // IME変換状態追跡
+    ec.addEventListener("compositionstart", () => {
+      isComposing = true;
+      setComposingText("");
+    });
+    ec.addEventListener("compositionend", () => {
+      isComposing = false;
+      // 確定テキストを挿入
+      const finalText = ec.text;
+      setComposingText("");
+      if (finalText) {
+        insertTextAtCursor(finalText);
+        // バッファリセット
+        requestAnimationFrame(() => {
+          try {
+            ec.updateText(0, ec.text.length, "");
+            ec.updateSelection(0, 0);
+          } catch {}
+        });
+      }
+    });
 
     // 制御境界を更新
     const updateBounds = () => {
