@@ -254,116 +254,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // ─── EditContext API（Chrome/Edge 121+でIME対応） ───
-  const editContextRef = useRef<EditContext | null>(null);
-  const hasEditContext = typeof window !== "undefined" && "EditContext" in window;
-  const [composingText, setComposingText] = useState("");
+  // ─── 入力方式: 見えるtextarea ───
+  // IME対応のため、ツールバー下に入力バーを常時表示
+  const [inputBarText, setInputBarText] = useState("");
+  const isComposingRef = useRef(false);
 
-  // EditContextイベントから最新のstateを参照するためのrefs
-  const cursorRef = useRef(cursor);
-  cursorRef.current = cursor;
-  const docRef = useRef(doc);
-  docRef.current = doc;
-
-  const insertTextAtCursor = useCallback((insertedText: string) => {
-    if (!insertedText) return;
-    const c = cursorRef.current;
-    const d = docRef.current;
-    const block = d.blocks[c.blockIndex];
-    if (!block) return;
-
-    let text = "";
-    if (block.type === "title") text = c.field === "title" ? block.title : block.author;
-    else if (block.type === "serif") text = c.field === "speaker" ? block.speaker : block.speech;
-    else text = (block as any).text || "";
-
-    const newText = text.slice(0, c.charIndex) + insertedText + text.slice(c.charIndex);
-
-    pushHistory();
-    setSelAnchor(null);
-    updateDoc((prev) => {
-      const nb = [...prev.blocks];
-      const b = { ...nb[c.blockIndex] } as any;
-      if (b.type === "title") { if (c.field === "title") b.title = newText; else b.author = newText; }
-      else if (b.type === "serif") { if (c.field === "speaker") b.speaker = newText; else b.speech = newText; }
-      else b.text = newText;
-      nb[c.blockIndex] = b;
-      return { ...prev, blocks: nb };
-    });
-    setCursor((prev) => ({ ...prev, charIndex: c.charIndex + insertedText.length }));
-  }, [pushHistory, updateDoc]);
-
-  useEffect(() => {
-    if (!hasEditContext) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ec = new EditContext();
-    editContextRef.current = ec;
-    (canvas as any).editContext = ec;
-
-    // IME変換状態
-    let isComposing = false;
-
-    // テキスト入力イベント
-    const onTextUpdate = (e: Event) => {
-      const evt = e as TextUpdateEvent;
-      if (isComposing) {
-        // 変換中: 表示だけ更新、ドキュメントには挿入しない
-        setComposingText(evt.text);
-        return;
-      }
-      // 確定テキスト: ドキュメントに挿入
-      insertTextAtCursor(evt.text);
-      // EditContextバッファをリセット
-      requestAnimationFrame(() => {
-        try {
-          ec.updateText(0, ec.text.length, "");
-          ec.updateSelection(0, 0);
-        } catch {}
-      });
-    };
-    ec.addEventListener("textupdate", onTextUpdate);
-
-    // IME変換状態追跡
-    ec.addEventListener("compositionstart", () => {
-      isComposing = true;
-      setComposingText("");
-    });
-    ec.addEventListener("compositionend", () => {
-      isComposing = false;
-      // 確定テキストを挿入
-      const finalText = ec.text;
-      setComposingText("");
-      if (finalText) {
-        insertTextAtCursor(finalText);
-        // バッファリセット
-        requestAnimationFrame(() => {
-          try {
-            ec.updateText(0, ec.text.length, "");
-            ec.updateSelection(0, 0);
-          } catch {}
-        });
-      }
-    });
-
-    // 制御境界を更新
-    const updateBounds = () => {
-      const rect = canvas.getBoundingClientRect();
-      ec.updateControlBounds(new DOMRect(rect.x, rect.y, rect.width, rect.height));
-      ec.updateSelectionBounds(new DOMRect(rect.x + rect.width / 2, rect.y + 50, 1, 20));
-    };
-    updateBounds();
-    window.addEventListener("resize", updateBounds);
-    canvas.tabIndex = 0;
-
-    return () => {
-      window.removeEventListener("resize", updateBounds);
-      ec.removeEventListener("textupdate", onTextUpdate);
-      (canvas as any).editContext = null;
-      editContextRef.current = null;
-    };
-  }, [hasEditContext, insertTextAtCursor]);
+  // commitInputBarはgetFieldTextの後で定義（下記参照）
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -383,6 +279,30 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     },
     [doc]
   );
+
+  // 入力バーからテキストを確定してドキュメントに挿入
+  const commitInputBar = useCallback(() => {
+    const text = inputBarText.trim();
+    if (!text) return;
+
+    const { blockIndex, field, charIndex } = cursor;
+    const fieldText = getFieldText(cursor);
+    const newText = fieldText.slice(0, charIndex) + text + fieldText.slice(charIndex);
+
+    pushHistory();
+    setSelAnchor(null);
+    updateDoc((d) => {
+      const nb = [...d.blocks];
+      const b = { ...nb[blockIndex] } as any;
+      if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
+      else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+      else b.text = newText;
+      nb[blockIndex] = b;
+      return { ...d, blocks: nb };
+    });
+    setCursor({ ...cursor, charIndex: charIndex + text.length });
+    setInputBarText("");
+  }, [inputBarText, cursor, getFieldText, pushHistory, updateDoc]);
 
   // コピー対象テキストを取得
   const getSelectionText = useCallback(() => {
@@ -427,7 +347,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<CursorPosition | null>(null);
-  const isComposingRef = useRef(false); // IME変換中フラグ
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // mousedown: カーソル設置 + テキストドラッグ or ブロックドラッグ
@@ -435,14 +354,10 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
       setContextMenu(null);
-      if (hasEditContext) {
-        // EditContext: Canvasにフォーカス
-        canvasRef.current?.focus();
-      } else {
-        // Fallback: textareaにフォーカス
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
+      // 入力バーの内容を先に確定
+      if (inputBarText) commitInputBar();
+      // 入力バーにフォーカス
+      setTimeout(() => inputRef.current?.focus(), 0);
 
       const canvas = canvasRef.current;
       if (canvas) {
@@ -911,13 +826,32 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 入力用textarea（EditContextがない場合のフォールバック） */}
-      {!hasEditContext && (
-        <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
+      {/* 入力バー */}
+      <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
+        <span className="text-xs text-gray-400 shrink-0">入力</span>
+        <input
+          ref={inputRef as any}
+          type="text"
+          value={inputBarText}
+          onChange={(e) => setInputBarText(e.target.value)}
+          onKeyDown={(e) => {
+            if (isComposingRef.current) return;
+            if (e.key === "Enter") { e.preventDefault(); commitInputBar(); return; }
+            // 他のキーはcanvasのhandleKeyDownに転送
+            handleKeyDown(e as any);
+          }}
           onCompositionStart={() => { isComposingRef.current = true; }}
-          onCompositionEnd={(e) => { isComposingRef.current = false; handleInput(e as any); }}
-          className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
-      )}
+          onCompositionEnd={() => { isComposingRef.current = false; }}
+          placeholder="ここに入力してEnterで確定"
+          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-400 focus:ring-1 focus:ring-blue-200 outline-none bg-white"
+          style={{ maxWidth: 400 }}
+          autoFocus
+        />
+        <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={commitInputBar}
+          className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
+          確定
+        </button>
+      </div>
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
@@ -925,11 +859,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
               <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}
-              onKeyDown={hasEditContext ? handleKeyDown as any : undefined} style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
+ style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
             </div>
           ) : (
             <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}
-              onKeyDown={hasEditContext ? handleKeyDown as any : undefined} className="absolute inset-0" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
+ className="absolute inset-0" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
           )}
         </div>
         {/* コンテキストメニュー */}
