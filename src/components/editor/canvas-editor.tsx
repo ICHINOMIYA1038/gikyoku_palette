@@ -259,6 +259,40 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const hasEditContext = typeof window !== "undefined" && "EditContext" in window;
   const [composingText, setComposingText] = useState("");
 
+  // EditContextイベントから最新のstateを参照するためのrefs
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
+  const docRef = useRef(doc);
+  docRef.current = doc;
+
+  const insertTextAtCursor = useCallback((insertedText: string) => {
+    if (!insertedText) return;
+    const c = cursorRef.current;
+    const d = docRef.current;
+    const block = d.blocks[c.blockIndex];
+    if (!block) return;
+
+    let text = "";
+    if (block.type === "title") text = c.field === "title" ? block.title : block.author;
+    else if (block.type === "serif") text = c.field === "speaker" ? block.speaker : block.speech;
+    else text = (block as any).text || "";
+
+    const newText = text.slice(0, c.charIndex) + insertedText + text.slice(c.charIndex);
+
+    pushHistory();
+    setSelAnchor(null);
+    updateDoc((prev) => {
+      const nb = [...prev.blocks];
+      const b = { ...nb[c.blockIndex] } as any;
+      if (b.type === "title") { if (c.field === "title") b.title = newText; else b.author = newText; }
+      else if (b.type === "serif") { if (c.field === "speaker") b.speaker = newText; else b.speech = newText; }
+      else b.text = newText;
+      nb[c.blockIndex] = b;
+      return { ...prev, blocks: nb };
+    });
+    setCursor((prev) => ({ ...prev, charIndex: c.charIndex + insertedText.length }));
+  }, [pushHistory, updateDoc]);
+
   useEffect(() => {
     if (!hasEditContext) return;
     const canvas = canvasRef.current;
@@ -269,44 +303,24 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     (canvas as any).editContext = ec;
 
     // テキスト入力イベント
-    ec.addEventListener("textupdate", ((e: TextUpdateEvent) => {
-      const insertedText = e.text;
-      if (!insertedText && e.updateRangeStart === e.updateRangeEnd) return;
-
-      // EditContextのテキストモデルをリセット（我々のモデルで管理するため）
-      // updateRangeStart/End を使ってどの部分が変更されたか判定
-      pushHistory();
-      const { blockIndex, field, charIndex } = cursor;
-      const text = getFieldText(cursor);
-      const newText = text.slice(0, charIndex) + insertedText + text.slice(charIndex);
-
-      setSelAnchor(null);
-      updateDoc((d) => {
-        const nb = [...d.blocks];
-        const b = { ...nb[blockIndex] } as any;
-        if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
-        else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
-        else b.text = newText;
-        nb[blockIndex] = b;
-        return { ...d, blocks: nb };
-      });
-      setCursor((c) => ({ ...c, charIndex: charIndex + insertedText.length }));
-
+    const onTextUpdate = (e: Event) => {
+      const evt = e as TextUpdateEvent;
+      insertTextAtCursor(evt.text);
       // EditContextの内部テキストをリセット
       requestAnimationFrame(() => {
-        ec.updateText(0, ec.text.length, "");
-        ec.updateSelection(0, 0);
+        try {
+          ec.updateText(0, ec.text.length, "");
+          ec.updateSelection(0, 0);
+        } catch {}
       });
-    }) as EventListener);
+    };
+    ec.addEventListener("textupdate", onTextUpdate);
 
     // IME変換中テキスト表示
     ec.addEventListener("compositionstart", () => { setComposingText(""); });
     ec.addEventListener("compositionend", () => { setComposingText(""); });
-    ec.addEventListener("textformatupdate", (() => {
-      setComposingText(ec.text);
-    }) as EventListener);
 
-    // 制御境界を更新（IMEウィンドウの位置決め用）
+    // 制御境界を更新
     const updateBounds = () => {
       const rect = canvas.getBoundingClientRect();
       ec.updateControlBounds(new DOMRect(rect.x, rect.y, rect.width, rect.height));
@@ -314,16 +328,15 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     };
     updateBounds();
     window.addEventListener("resize", updateBounds);
-
-    // Canvasをフォーカス可能にする
     canvas.tabIndex = 0;
 
     return () => {
       window.removeEventListener("resize", updateBounds);
+      ec.removeEventListener("textupdate", onTextUpdate);
       (canvas as any).editContext = null;
       editContextRef.current = null;
     };
-  }, [hasEditContext]); // eslint-disable-line
+  }, [hasEditContext, insertTextAtCursor]);
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
