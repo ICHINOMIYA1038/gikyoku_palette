@@ -254,8 +254,76 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // textareaは常に空にしておく（入力はonInputで捕捉、コピーはdocument copyイベントで処理）
-  // 以前はここでtextareaに全文をセットしていたが、それが入力を壊していた
+  // ─── EditContext API（Chrome/Edge 121+でIME対応） ───
+  const editContextRef = useRef<EditContext | null>(null);
+  const hasEditContext = typeof window !== "undefined" && "EditContext" in window;
+  const [composingText, setComposingText] = useState("");
+
+  useEffect(() => {
+    if (!hasEditContext) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ec = new EditContext();
+    editContextRef.current = ec;
+    (canvas as any).editContext = ec;
+
+    // テキスト入力イベント
+    ec.addEventListener("textupdate", ((e: TextUpdateEvent) => {
+      const insertedText = e.text;
+      if (!insertedText && e.updateRangeStart === e.updateRangeEnd) return;
+
+      // EditContextのテキストモデルをリセット（我々のモデルで管理するため）
+      // updateRangeStart/End を使ってどの部分が変更されたか判定
+      pushHistory();
+      const { blockIndex, field, charIndex } = cursor;
+      const text = getFieldText(cursor);
+      const newText = text.slice(0, charIndex) + insertedText + text.slice(charIndex);
+
+      setSelAnchor(null);
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        const b = { ...nb[blockIndex] } as any;
+        if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
+        else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+        else b.text = newText;
+        nb[blockIndex] = b;
+        return { ...d, blocks: nb };
+      });
+      setCursor((c) => ({ ...c, charIndex: charIndex + insertedText.length }));
+
+      // EditContextの内部テキストをリセット
+      requestAnimationFrame(() => {
+        ec.updateText(0, ec.text.length, "");
+        ec.updateSelection(0, 0);
+      });
+    }) as EventListener);
+
+    // IME変換中テキスト表示
+    ec.addEventListener("compositionstart", () => { setComposingText(""); });
+    ec.addEventListener("compositionend", () => { setComposingText(""); });
+    ec.addEventListener("textformatupdate", (() => {
+      setComposingText(ec.text);
+    }) as EventListener);
+
+    // 制御境界を更新（IMEウィンドウの位置決め用）
+    const updateBounds = () => {
+      const rect = canvas.getBoundingClientRect();
+      ec.updateControlBounds(new DOMRect(rect.x, rect.y, rect.width, rect.height));
+      ec.updateSelectionBounds(new DOMRect(rect.x + rect.width / 2, rect.y + 50, 1, 20));
+    };
+    updateBounds();
+    window.addEventListener("resize", updateBounds);
+
+    // Canvasをフォーカス可能にする
+    canvas.tabIndex = 0;
+
+    return () => {
+      window.removeEventListener("resize", updateBounds);
+      (canvas as any).editContext = null;
+      editContextRef.current = null;
+    };
+  }, [hasEditContext]); // eslint-disable-line
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -326,9 +394,15 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
-      e.preventDefault(); // Canvasへのフォーカス移動を防止
       setContextMenu(null);
-      inputRef.current?.focus(); // textareaにフォーカスを当てる
+      if (hasEditContext) {
+        // EditContext: Canvasにフォーカス
+        canvasRef.current?.focus();
+      } else {
+        // Fallback: textareaにフォーカス
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
 
       const canvas = canvasRef.current;
       if (canvas) {
@@ -797,21 +871,25 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 共通の非表示textarea（フォーカス・入力・コピペ用） */}
-      <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
-        onCompositionStart={() => { isComposingRef.current = true; }}
-        onCompositionEnd={(e) => { isComposingRef.current = false; handleInput(e as any); }}
-        className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
+      {/* 入力用textarea（EditContextがない場合のフォールバック） */}
+      {!hasEditContext && (
+        <textarea ref={inputRef} onKeyDown={handleKeyDown} onInput={handleInput} onPaste={handlePaste}
+          onCompositionStart={() => { isComposingRef.current = true; }}
+          onCompositionEnd={(e) => { isComposingRef.current = false; handleInput(e as any); }}
+          className="fixed opacity-0" style={{ top: -9999, left: -9999, width: 1, height: 1 }} autoFocus />
+      )}
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
         <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
           {mode === "script" ? (
             <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
+              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}
+              onKeyDown={hasEditContext ? handleKeyDown as any : undefined} style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
             </div>
           ) : (
-            <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu} className="absolute inset-0" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
+            <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}
+              onKeyDown={hasEditContext ? handleKeyDown as any : undefined} className="absolute inset-0" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
           )}
         </div>
         {/* コンテキストメニュー */}
