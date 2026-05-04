@@ -40,7 +40,7 @@ type Props = {
 
 export function CanvasEditor({ playId, initialContent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [doc, setDoc] = useState<PlayDocument>(() =>
     initialContent ? fromBodyJson(initialContent) : EMPTY_DOC
   );
@@ -354,11 +354,10 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (e.button === 2) return;
+      e.preventDefault(); // Canvasへのフォーカスをブロック
       setContextMenu(null);
-      // 入力バーの内容を先に確定
       if (inputBarText) commitInputBar();
-      // 入力バーにフォーカス
-      setTimeout(() => inputRef.current?.focus(), 0);
+      inputRef.current?.focus();
 
       const canvas = canvasRef.current;
       if (canvas) {
@@ -404,7 +403,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       isDraggingRef.current = true;
       inputRef.current?.focus();
     },
-    [hitTest, cursor, selAnchor, mode, containerSize, doc]
+    [hitTest, cursor, selAnchor, mode, containerSize, doc, inputBarText, commitInputBar]
   );
 
   // カーソルスタイル
@@ -827,25 +826,24 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 入力フィールド（IME対応・Canvas上にリアルタイム表示） */}
-      <div className="shrink-0 overflow-hidden" style={{ height: 0 }}>
-        <input
-          ref={inputRef as any}
-          type="text"
-          value={inputBarText}
-          onChange={(e) => setInputBarText(e.target.value)}
-          onKeyDown={(e) => {
-            if (isComposingRef.current) return;
-            if (e.key === "Enter") { e.preventDefault(); commitInputBar(); return; }
-            if (e.key === "Escape") { e.preventDefault(); setInputBarText(""); return; }
-            if (!inputBarText) handleKeyDown(e as any);
-          }}
-          onCompositionStart={() => { isComposingRef.current = true; }}
-          onCompositionEnd={() => { isComposingRef.current = false; }}
-          className="w-full px-2 py-1 text-sm outline-none"
-          autoFocus
-        />
-      </div>
+      {/* 入力フィールド（IME対応・ツールバーの上に透明配置） */}
+      <input
+        ref={inputRef}
+        type="text"
+        value={inputBarText}
+        onChange={(e) => setInputBarText(e.target.value)}
+        onKeyDown={(e) => {
+          if (isComposingRef.current) return;
+          if (e.key === "Enter") { e.preventDefault(); commitInputBar(); return; }
+          if (e.key === "Escape") { e.preventDefault(); setInputBarText(""); return; }
+          if (!inputBarText) handleKeyDown(e as any);
+        }}
+        onCompositionStart={() => { isComposingRef.current = true; }}
+        onCompositionEnd={() => { isComposingRef.current = false; }}
+        className="fixed"
+        style={{ top: 0, left: 0, width: 300, height: 30, fontSize: 16, opacity: 0.01, pointerEvents: "none" }}
+        autoFocus
+      />
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
