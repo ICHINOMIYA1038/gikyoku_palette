@@ -410,8 +410,8 @@ export function drawScript(
       }
     }
 
-    // IME変換中テキスト（下線付き仮表示）
-    if (composingText && isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
+    // 入力中テキスト（下線付きリアルタイム表示）
+    if (composingText && isActive && (cursor?.field === "speech" || cursor?.field === "text" || cursor?.field === "speaker")) {
       const li = cursor.charIndex - col.startCharIndex;
       if (li >= 0 && li <= col.chars.length) {
         ctx.font = bodyFont;

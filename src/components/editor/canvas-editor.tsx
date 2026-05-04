@@ -220,6 +220,10 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     1 // 1倍以上にはしない
   );
 
+  // 入力バー（IME対応）
+  const [inputBarText, setInputBarText] = useState("");
+  const isComposingRef = useRef(false);
+
   // ブロックドラッグ状態
   const [blockDrag, setBlockDrag] = useState<BlockDragState>(null);
   const [scriptDrag, setScriptDrag] = useState<ScriptDragState>(null);
@@ -242,22 +246,19 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag);
+      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag, inputBarText);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, inputBarText);
     }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag]);
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag, inputBarText]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // ─── 入力方式: 見えるtextarea ───
-  // IME対応のため、ツールバー下に入力バーを常時表示
-  const [inputBarText, setInputBarText] = useState("");
-  const isComposingRef = useRef(false);
+  // (inputBarText moved above redraw)
 
   // commitInputBarはgetFieldTextの後で定義（下記参照）
 
@@ -826,9 +827,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 入力バー */}
-      <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border-b border-gray-200 shrink-0">
-        <span className="text-xs text-gray-400 shrink-0">入力</span>
+      {/* 入力フィールド（IME対応・Canvas上にリアルタイム表示） */}
+      <div className="shrink-0 overflow-hidden" style={{ height: 0 }}>
         <input
           ref={inputRef as any}
           type="text"
@@ -837,20 +837,14 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           onKeyDown={(e) => {
             if (isComposingRef.current) return;
             if (e.key === "Enter") { e.preventDefault(); commitInputBar(); return; }
-            // 他のキーはcanvasのhandleKeyDownに転送
-            handleKeyDown(e as any);
+            if (e.key === "Escape") { e.preventDefault(); setInputBarText(""); return; }
+            if (!inputBarText) handleKeyDown(e as any);
           }}
           onCompositionStart={() => { isComposingRef.current = true; }}
           onCompositionEnd={() => { isComposingRef.current = false; }}
-          placeholder="ここに入力してEnterで確定"
-          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-400 focus:ring-1 focus:ring-blue-200 outline-none bg-white"
-          style={{ maxWidth: 400 }}
+          className="w-full px-2 py-1 text-sm outline-none"
           autoFocus
         />
-        <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={commitInputBar}
-          className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
-          確定
-        </button>
       </div>
 
       {/* Canvas + Side Panel */}
