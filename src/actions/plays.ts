@@ -357,6 +357,36 @@ export async function createPlay(formData: FormData) {
 }
 
 /**
+ * エディタ即起動用の下書き作成。タイトルだけ受け取り最小構成で作成する。
+ */
+export async function createPlayDraft(title: string) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const t = title.trim() || "無題の作品";
+  const play = await prisma.palettePlay.create({
+    data: {
+      title: t,
+      synopsis: "（あとで編集）",
+      body: "",
+      bodyType: "editor",
+      bodyOrientation: "portrait",
+      readingDirection: "ltr",
+      durationMinutes: 60,
+      castTotal: 1,
+      castMale: 0,
+      castFemale: 0,
+      castOther: 0,
+      feeAmount: 0,
+      isFree: true,
+      authorId: session.user.id,
+    },
+  });
+  revalidatePath("/dashboard/plays");
+  redirect(`/editor/${play.id}`);
+}
+
+/**
  * エディタの自動保存用。bodyJson を更新し、プレーンテキストも body に同期する。
  */
 export async function savePlayBody(

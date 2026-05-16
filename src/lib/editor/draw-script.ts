@@ -50,8 +50,11 @@ const CHAR_H = Math.floor(BODY_H / CHARS_PER_COL); // 1文字の送りピッチ
 
 export { PAGE_W, PAGE_H, COL_W, M_TOP, HEADER_H, SEP_Y };
 
+export type CursorRect = { x: number; y: number; w: number; h: number };
+
 /** カーソル描画（横線タイプ、縦書き用） */
-function drawCursorLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
+function drawCursorLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, out?: { rect: CursorRect | null }) {
+  if (out) out.rect = { x: x - 6, y: y - 6, w: width + 12, h: width + 12 };
   // メインカーソル（太い青線）
   ctx.fillStyle = "#2563eb";
   ctx.fillRect(x, y, width, 3);
@@ -195,8 +198,11 @@ export function drawScript(
   currentPage: number,
   selection: SelectionRange = null,
   blockDrag: ScriptDragState = null,
-  composingText: string = ""
+  composingText: string = "",
+  cursorOut?: { rect: CursorRect | null }
 ) {
+  if (cursorOut) cursorOut.rect = null;
+  const _cur = cursorOut; // 内側でdrawCursorLineに渡せるよう別名
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const bodyFont = fontStr(FONT_SIZE, cfg);
   const speakerFont = fontStr(SPEAKER_FONT_SIZE, cfg, true);
@@ -272,7 +278,7 @@ export function drawScript(
         ctx.fillText(ch, col.x - cw / 2, BODY_TOP + i * (fs + 6));
       }
       if (isActive && cursor?.field === "title") {
-        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + cursor.charIndex * (fs + 6), fs + 2);
+        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + cursor.charIndex * (fs + 6), fs + 2, _cur);
       }
       continue;
     }
@@ -297,7 +303,7 @@ export function drawScript(
         ctx.fillText(ch, col.x - cw / 2, BODY_TOP + offsetY + i * lineH);
       }
       if (isActive && cursor?.field === "author") {
-        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * lineH, fs + 2);
+        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * lineH, fs + 2, _cur);
       }
       continue;
     }
@@ -333,7 +339,7 @@ export function drawScript(
             const cw = ctx.measureText(ph[i]).width;
             ctx.fillText(ph[i], col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, phTop + i * (SPEAKER_FONT_SIZE * 0.8 + 2));
           }
-          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spBottom, FONT_SIZE + 2);
+          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spBottom, FONT_SIZE + 2, _cur);
         }
       } else {
         ctx.font = fontStr(spFontSize, cfg, true);
@@ -345,7 +351,7 @@ export function drawScript(
           ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spTop + i * spCharH);
         }
         if (isActive && cursor?.field === "speaker") {
-          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2);
+          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2, _cur);
         }
       }
     }
@@ -406,7 +412,7 @@ export function drawScript(
     if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
       const li = cursor.charIndex - col.startCharIndex;
       if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
-        drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + li * cH, fs + 2);
+        drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + li * cH, fs + 2, _cur);
       }
     }
 

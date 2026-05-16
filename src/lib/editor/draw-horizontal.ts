@@ -12,8 +12,11 @@ import {
 
 const PT2PX = 96 / 72;
 
+import type { CursorRect } from "./draw-script";
+
 /** カーソル描画（縦線タイプ、横書き用） */
-function drawCursorVert(ctx: CanvasRenderingContext2D, x: number, y: number, height: number) {
+function drawCursorVert(ctx: CanvasRenderingContext2D, x: number, y: number, height: number, out?: { rect: CursorRect | null }) {
+  if (out) out.rect = { x: x - 4, y: y - 4, w: 16, h: height + 8 };
   ctx.fillStyle = "#2563eb";
   ctx.fillRect(x, y, 3, height);
   // 上下に小さな三角形
@@ -81,8 +84,11 @@ export function drawHorizontal(
   h: number,
   selection: SelectionRange = null,
   blockDrag: BlockDragState = null,
-  composingText: string = ""
+  composingText: string = "",
+  cursorOut?: { rect: CursorRect | null }
 ) {
+  if (cursorOut) cursorOut.rect = null;
+  const _cur = cursorOut;
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
   const fontSize = cfg.fontSize * PT2PX;
   const speakerFontSize = cfg.speakerFontSize * PT2PX;
@@ -140,13 +146,13 @@ export function drawHorizontal(
           if (cursor.field === "title") {
             ctx.font = fontStr(fontSize * 1.5, cfg, true);
             const cx = H_MARGIN.left + ctx.measureText((block.title || "").slice(0, cursor.charIndex)).width;
-            drawCursorVert(ctx, cx, y + 8, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16, _cur);
           } else if (cursor.field === "author") {
             ctx.font = fontStr(fontSize * 1.5, cfg, true);
             const tw = ctx.measureText(block.title || "").width;
             ctx.font = fontStr(fontSize * 0.75, cfg);
             const cx = H_MARGIN.left + tw + 24 + ctx.measureText((block.author || "").slice(0, cursor.charIndex)).width;
-            drawCursorVert(ctx, cx, y + 8, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16, _cur);
           }
         }
         break;
@@ -183,7 +189,7 @@ export function drawHorizontal(
         if (isActive && cursor?.field === "text") {
           ctx.font = fontStr(fontSize * 0.85, cfg, false, true);
           const cx = H_MARGIN.left + 12 + ctx.measureText((block.text || "").slice(0, cursor.charIndex)).width;
-          drawCursorVert(ctx, cx, y + 6, rowH - 12);
+          drawCursorVert(ctx, cx, y + 6, rowH - 12, _cur);
         }
         break;
       }
@@ -209,7 +215,7 @@ export function drawHorizontal(
         if (isActive && cursor?.field === "text") {
           ctx.font = fontStr(fontSize * 1.1, cfg, true);
           const cx = H_MARGIN.left + ctx.measureText((block.text || "").slice(0, cursor.charIndex)).width;
-          drawCursorVert(ctx, cx, y + 8, rowH - 16);
+          drawCursorVert(ctx, cx, y + 8, rowH - 16, _cur);
         }
         break;
       }
@@ -270,7 +276,7 @@ export function drawHorizontal(
               ctx.fillText(composingText, cx + 2, cy);
               ctx.fillRect(cx + 2, cy + 10, ctx.measureText(composingText).width, 1);
             }
-            drawCursorVert(ctx, cx, y + 8, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16, _cur);
           } else if (cursor.field === "speech") {
             ctx.font = fontStr(fontSize, cfg);
             const cx = H_SPEECH_LEFT + ctx.measureText((block.speech || "").slice(0, cursor.charIndex)).width;
@@ -280,7 +286,7 @@ export function drawHorizontal(
               ctx.fillText(composingText, cx + 2, cy);
               ctx.fillRect(cx + 2, cy + 10, ctx.measureText(composingText).width, 1);
             }
-            drawCursorVert(ctx, cx, y + 8, rowH - 16);
+            drawCursorVert(ctx, cx, y + 8, rowH - 16, _cur);
           }
         }
         break;
@@ -312,7 +318,7 @@ export function drawHorizontal(
         if (isActive && cursor?.field === "text") {
           ctx.font = fontStr(fontSize * 0.9, cfg, false, true);
           const cx = H_SPEECH_LEFT + ctx.measureText((block.text || "").slice(0, cursor.charIndex)).width;
-          drawCursorVert(ctx, cx, y + 6, rowH - 12);
+          drawCursorVert(ctx, cx, y + 6, rowH - 12, _cur);
         }
         break;
       }

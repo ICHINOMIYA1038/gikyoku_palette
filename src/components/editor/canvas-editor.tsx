@@ -14,6 +14,7 @@ import {
   type ColLayout,
   type SelectionRange,
   type ScriptDragState,
+  type CursorRect,
   computeColumns,
   drawScript,
   hitTestScript,
@@ -57,6 +58,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<ColLayout[]>([]);
   const historyRef = useRef<PlayDocument[]>([]);
+  const cursorOutRef = useRef<{ rect: CursorRect | null }>({ rect: null });
+  const [inputPos, setInputPos] = useState<{ left: number; top: number; height: number } | null>(null);
 
   // 自動保存
   const scheduleSave = useCallback(
@@ -220,9 +223,13 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     1 // 1倍以上にはしない
   );
 
-  // 入力バー（IME対応）
-  const [inputBarText, setInputBarText] = useState("");
+  // IME composing text（Canvasに表示するため）
+  const [composingText, setComposingText] = useState("");
   const isComposingRef = useRef(false);
+  const cursorRef = useRef(cursor);
+  const docRef = useRef(doc);
+  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
+  useEffect(() => { docRef.current = doc; }, [doc]);
 
   // ブロックドラッグ状態
   const [blockDrag, setBlockDrag] = useState<BlockDragState>(null);
@@ -241,26 +248,43 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       ? { blockIndex: cursor.blockIndex, field: cursor.field, start: Math.min(selAnchor.charIndex, cursor.charIndex), end: Math.max(selAnchor.charIndex, cursor.charIndex) }
       : null;
 
+    const out = cursorOutRef.current;
+    out.rect = null;
+
     if (mode === "script") {
       canvas.width = PAGE_W;
       canvas.height = PAGE_H;
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag, inputBarText);
+      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag, composingText, out);
     } else {
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
-      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, inputBarText);
+      drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, composingText, out);
     }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag, inputBarText]);
+
+    // カーソルのキャンバス座標 → 画面座標へ変換してinput位置に反映
+    const rect = canvas.getBoundingClientRect();
+    const cr = out.rect;
+    if (cr) {
+      const sx = rect.width / canvas.width;
+      const sy = rect.height / canvas.height;
+      setInputPos({
+        left: rect.left + cr.x * sx,
+        top: rect.top + cr.y * sy,
+        height: Math.max(20, cr.h * sy),
+      });
+    } else {
+      setInputPos(null);
+    }
+  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag, composingText]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
 
-  // (inputBarText moved above redraw)
+  // (composingText moved above redraw)
 
-  // commitInputBarはgetFieldTextの後で定義（下記参照）
 
   // フィールドテキスト取得
   const getFieldText = useCallback(
@@ -281,29 +305,35 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [doc]
   );
 
-  // 入力バーからテキストを確定してドキュメントに挿入
-  const commitInputBar = useCallback(() => {
-    const text = inputBarText.trim();
+  // テキストを現在のカーソル位置に挿入（refベース、stale closure回避）
+  const insertTextAtCursor = useCallback((text: string) => {
     if (!text) return;
-
-    const { blockIndex, field, charIndex } = cursor;
-    const fieldText = getFieldText(cursor);
-    const newText = fieldText.slice(0, charIndex) + text + fieldText.slice(charIndex);
-
+    const cur = cursorRef.current;
+    const d = docRef.current;
+    const block = d.blocks[cur.blockIndex];
+    if (!block) return;
+    const fieldText = (() => {
+      switch (block.type) {
+        case "title": return cur.field === "title" ? block.title : cur.field === "author" ? block.author : "";
+        case "serif": return cur.field === "speaker" ? block.speaker : cur.field === "direction" ? (block.direction || "") : block.speech;
+        case "castList": return "";
+        default: return (block as any).text || "";
+      }
+    })();
+    const newText = fieldText.slice(0, cur.charIndex) + text + fieldText.slice(cur.charIndex);
     pushHistory();
     setSelAnchor(null);
-    updateDoc((d) => {
-      const nb = [...d.blocks];
-      const b = { ...nb[blockIndex] } as any;
-      if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
-      else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
+    updateDoc((dd) => {
+      const nb = [...dd.blocks];
+      const b = { ...nb[cur.blockIndex] } as any;
+      if (b.type === "title") { if (cur.field === "title") b.title = newText; else b.author = newText; }
+      else if (b.type === "serif") { if (cur.field === "speaker") b.speaker = newText; else b.speech = newText; }
       else b.text = newText;
-      nb[blockIndex] = b;
-      return { ...d, blocks: nb };
+      nb[cur.blockIndex] = b;
+      return { ...dd, blocks: nb };
     });
-    setCursor({ ...cursor, charIndex: charIndex + text.length });
-    setInputBarText("");
-  }, [inputBarText, cursor, getFieldText, pushHistory, updateDoc]);
+    setCursor({ ...cur, charIndex: cur.charIndex + text.length });
+  }, [pushHistory, updateDoc]);
 
   // コピー対象テキストを取得
   const getSelectionText = useCallback(() => {
@@ -356,7 +386,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       if (e.button === 2) return;
       e.preventDefault(); // Canvasへのフォーカスをブロック
       setContextMenu(null);
-      if (inputBarText) commitInputBar();
       inputRef.current?.focus();
 
       const canvas = canvasRef.current;
@@ -403,7 +432,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       isDraggingRef.current = true;
       inputRef.current?.focus();
     },
-    [hitTest, cursor, selAnchor, mode, containerSize, doc, inputBarText, commitInputBar]
+    [hitTest, cursor, selAnchor, mode, containerSize, doc]
   );
 
   // カーソルスタイル
@@ -726,40 +755,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [cursor, getFieldText, pushHistory, updateDoc]
   );
 
-  const handleInput = useCallback(
-    (e: React.FormEvent<HTMLTextAreaElement>) => {
-      // IME変換中は確定まで処理しない
-      if (isComposingRef.current) return;
-
-      const input = e.currentTarget;
-      const value = input.value;
-      if (!value) return;
-      input.value = "";
-
-      const delResult = deleteSelection();
-      const { blockIndex, field } = cursor;
-      const charIndex = delResult !== null
-        ? Math.min(cursor.charIndex, selAnchor?.charIndex ?? cursor.charIndex)
-        : cursor.charIndex;
-      const text = delResult !== null ? delResult : getFieldText(cursor);
-      const newText = text.slice(0, charIndex) + value + text.slice(charIndex);
-
-      pushHistory();
-      setSelAnchor(null);
-      updateDoc((d) => {
-        const nb = [...d.blocks];
-        const b = { ...nb[blockIndex] } as any;
-        if (b.type === "title") { if (field === "title") b.title = newText; else b.author = newText; }
-        else if (b.type === "serif") { if (field === "speaker") b.speaker = newText; else b.speech = newText; }
-        else b.text = newText;
-        nb[blockIndex] = b;
-        return { ...d, blocks: nb };
-      });
-      setCursor({ ...cursor, charIndex: charIndex + value.length });
-    },
-    [cursor, selAnchor, getFieldText, deleteSelection, pushHistory, updateDoc]
-  );
-
   // ペースト
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -826,22 +821,53 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
       </div>
 
-      {/* 入力フィールド（IME対応・ツールバーの上に透明配置） */}
+      {/* 入力フィールド（IME対応・カーソル位置に追従、uncontrolled） */}
       <input
         ref={inputRef}
         type="text"
-        value={inputBarText}
-        onChange={(e) => setInputBarText(e.target.value)}
+        defaultValue=""
         onKeyDown={(e) => {
           if (isComposingRef.current) return;
-          if (e.key === "Enter") { e.preventDefault(); commitInputBar(); return; }
-          if (e.key === "Escape") { e.preventDefault(); setInputBarText(""); return; }
-          if (!inputBarText) handleKeyDown(e as any);
+          // 通常キー（Enter, Backspace, 矢印など）はエディタ操作へ
+          handleKeyDown(e as any);
         }}
         onCompositionStart={() => { isComposingRef.current = true; }}
-        onCompositionEnd={() => { isComposingRef.current = false; }}
-        className="fixed"
-        style={{ top: 0, left: 0, width: 300, height: 30, fontSize: 16, opacity: 0.01, pointerEvents: "none" }}
+        onCompositionUpdate={(e) => {
+          // 未確定文字列をCanvasに表示するためstateに同期
+          setComposingText((e as any).data || "");
+        }}
+        onCompositionEnd={(e) => {
+          isComposingRef.current = false;
+          const finalText = (e as any).data || "";
+          setComposingText("");
+          if (inputRef.current) inputRef.current.value = "";
+          if (finalText) insertTextAtCursor(finalText);
+        }}
+        onInput={(e) => {
+          // IME中はcompositionupdate側で処理するので何もしない
+          if (isComposingRef.current) return;
+          const v = (e.currentTarget as HTMLInputElement).value;
+          if (v) {
+            (e.currentTarget as HTMLInputElement).value = "";
+            insertTextAtCursor(v);
+          }
+        }}
+        style={{
+          position: "fixed",
+          left: inputPos ? inputPos.left : -9999,
+          top: inputPos ? inputPos.top : 0,
+          width: 2,
+          height: inputPos ? inputPos.height : 20,
+          fontSize: 16,
+          border: "none",
+          outline: "none",
+          padding: 0,
+          margin: 0,
+          background: "transparent",
+          color: "transparent",
+          caretColor: "transparent",
+          zIndex: 10,
+        }}
         autoFocus
       />
 
