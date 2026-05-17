@@ -31,10 +31,12 @@ const M_LEFT = Math.round(20 * MM);   // 113px
 const M_RIGHT = Math.round(20 * MM);  // 113px
 
 // ─── テキスト設定 ───
-const FONT_SIZE = Math.round(12 * DPI / 72); // 12pt = 24px
-const SPEAKER_FONT_SIZE = Math.round(10 * DPI / 72); // 10pt = 20px
+const FONT_SIZE = Math.round(10 * DPI / 72); // 10pt = 20px (基準サイズ)
+const SERIF_FONT_SIZE = Math.round(9 * DPI / 72); // セリフ本文 9pt = 18px
+const SPEAKER_FONT_SIZE = Math.round(8.5 * DPI / 72); // 話者名 8.5pt = 17px
 const COLS_PER_PAGE = 20;
-const CHARS_PER_COL = 20;
+// 行間: 文字サイズの1.5倍程度をピッチに（読みやすさ重視）
+const LINE_PITCH_RATIO = 1.5;
 
 // ─── 計算値 ───
 const CONTENT_W = PAGE_W - M_LEFT - M_RIGHT; // 本文エリア幅
@@ -44,9 +46,10 @@ const SPEAKER_MAX_CHARS = 5; // 話者名最大表示文字数
 const SPEAKER_AREA_H = Math.round(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS + 12); // 話者名エリア高さ
 const HEADER_H = 18;
 const SEP_Y = M_TOP + HEADER_H + SPEAKER_AREA_H; // 区切り線Y
-const BODY_TOP = SEP_Y + 6; // 本文開始Y
+const BODY_TOP = SEP_Y + 20; // 本文開始Y（話者名との余白を広めに）
 const BODY_H = PAGE_H - M_BOTTOM - BODY_TOP;
-const CHAR_H = Math.floor(BODY_H / CHARS_PER_COL); // 1文字の送りピッチ
+const CHAR_H = Math.round(FONT_SIZE * LINE_PITCH_RATIO); // 1文字の送りピッチ
+const CHARS_PER_COL = Math.floor(BODY_H / CHAR_H); // 1列に入る文字数
 
 export { PAGE_W, PAGE_H, COL_W, M_TOP, HEADER_H, SEP_Y };
 
@@ -86,11 +89,11 @@ export type ColLayout = {
   chars: string;
   startCharIndex: number;
   page: number;
-  special?: "title" | "author" | "castLabel" | "castChar";
+  special?: "title" | "author" | "castLabel" | "castChar" | "sceneHeading";
 };
 
 // ト書きフォントサイズ（本文より小さい）
-const TOGAKI_FONT_SIZE = Math.round(10 * DPI / 72); // 10pt = 20px
+const TOGAKI_FONT_SIZE = Math.round(8 * DPI / 72); // 8pt = 16px
 // ト書きの字下げ（上からN文字分空ける）
 const TOGAKI_INDENT_CHARS = 1;
 // 登場人物の列幅（通常列の半分、きゅっと寄せる）
@@ -101,11 +104,103 @@ function colX(pixelOffset: number): number {
   return PAGE_W - M_RIGHT - COL_W / 2 - pixelOffset;
 }
 
+/** 縦書きで90度回転して描画すべき文字（横棒・括弧類） */
+const ROTATE_CHARS = new Set([
+  "ー", "−", "－", "‐", "—", "―", "─", "━",
+  "〜", "～", "＝", "=",
+  "（", "）", "(", ")",
+  "「", "」", "『", "』",
+  "［", "］", "[", "]",
+  "【", "】", "〔", "〕",
+  "〈", "〉", "《", "》",
+  "｛", "｝", "{", "}",
+  "<", ">", "＜", "＞",
+  "…", "‥", "⋯",
+]);
+
+/** 縦書きで右上に配置すべき句読点。横書きグリフの自然位置が左下にあるので、
+ *  Unicode縦書き変形(プレゼンテーション形式)に置換する */
+const PUNCT_SHIFT_TOPRIGHT = new Set(["、", "。", "．", "，", ",", "."]);
+const VERTICAL_FORM: Record<string, string> = {
+  "、": "︑", // U+FE11
+  "。": "︒", // U+FE12
+  "．": "︒",
+  "，": "︑",
+  ",": "︑",
+  ".": "︒",
+};
+
+/**
+ * 縦書き用に1文字を描画する。回転・位置調整を自動で行う。
+ * @param x 列の中央X
+ * @param y 文字セル上端Y
+ * @param cellH 文字セルの送り（縦方向のピッチ）
+ * @param fs フォントサイズ
+ */
+function drawVerticalChar(
+  ctx: CanvasRenderingContext2D,
+  ch: string,
+  x: number,
+  y: number,
+  cellH: number,
+  fs: number
+) {
+  const cw = ctx.measureText(ch).width;
+  if (ROTATE_CHARS.has(ch)) {
+    // 90度時計回りに回転。文字セルの中央を回転中心にする
+    ctx.save();
+    ctx.translate(x, y + cellH / 2);
+    ctx.rotate(Math.PI / 2);
+    // 回転後、原点を起点に水平に描画 → 中央寄せ
+    ctx.fillText(ch, -cw / 2, -fs * 0.35);
+    ctx.restore();
+    return;
+  }
+  if (PUNCT_SHIFT_TOPRIGHT.has(ch)) {
+    // Unicode縦書き形に置換して右上配置
+    const v = VERTICAL_FORM[ch] || ch;
+    const vw = ctx.measureText(v).width;
+    ctx.fillText(v, x + fs / 2 - vw, y);
+    return;
+  }
+  ctx.fillText(ch, x - cw / 2, y);
+}
+
+/** テキストを改行(\n)で段落分けし、各段落をcharsPerColで列分割する。startCharIndexは元テキスト全体での位置 */
+function splitTextByNewline(text: string, charsPerCol: number): Array<{ chars: string; startCharIndex: number }> {
+  const result: Array<{ chars: string; startCharIndex: number }> = [];
+  const paragraphs = text.split("\n");
+  let absPos = 0;
+  for (let pi = 0; pi < paragraphs.length; pi++) {
+    const p = paragraphs[pi];
+    if (p.length === 0) {
+      result.push({ chars: "", startCharIndex: absPos });
+    } else {
+      for (let i = 0; i < p.length; i += charsPerCol) {
+        result.push({ chars: p.slice(i, i + charsPerCol), startCharIndex: absPos + i });
+      }
+    }
+    absPos += p.length + 1; // +1 for \n
+  }
+  if (result.length === 0) result.push({ chars: "", startCharIndex: 0 });
+  return result;
+}
+
+// 同一ブロック内の列ピッチ（改行/折返し時の列間隔。極めて詰める）
+const WITHIN_BLOCK_COL_W = Math.round(COL_W * 0.5);
+// ブロック境界の追加余白（種別が変わる時）
+const BLOCK_GAP_W = Math.round(COL_W * 0.35);
+// セリフ→セリフ等、同種別ブロック間は追加余白なし
+const SAME_KIND_GAP_W = 0;
+
 export function computeColumns(doc: PlayDocument): ColLayout[] {
   const cols: ColLayout[] = [];
   let px = 0; // 右端からのピクセルオフセット
   let page = 0;
   let colsOnPage = 0;
+  let lastBlockIndex = -1;
+  let lastBlockType: string | null = null;
+  let isFirstColOfBlock = true;
 
   const advanceCol = (width: number = COL_W) => {
     px += width;
@@ -117,42 +212,66 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
     }
   };
 
+  // ブロック切り替え時に余白を追加（同種別なら極小、異種別なら大きめ）
+  const onBlockStart = (bi: number, type: string) => {
+    if (lastBlockIndex !== -1 && lastBlockIndex !== bi) {
+      px += (lastBlockType === type) ? SAME_KIND_GAP_W : BLOCK_GAP_W;
+    }
+    lastBlockIndex = bi;
+    lastBlockType = type;
+    isFirstColOfBlock = true;
+  };
+
+  // 同一ブロック内の列ピッチ（first/後続を区別せず全てタイトに）
+  const colWidthFor = (special?: string) => {
+    if (special === "castLabel" || special === "castChar") return CAST_COL_W;
+    if (isFirstColOfBlock) isFirstColOfBlock = false;
+    return WITHIN_BLOCK_COL_W;
+  };
+
   for (let bi = 0; bi < doc.blocks.length; bi++) {
     const block = doc.blocks[bi];
+    onBlockStart(bi, block.type);
 
     switch (block.type) {
       case "title":
-        // タイトル: 通常列幅
         cols.push({ blockIndex: bi, field: "title", x: colX(px), chars: block.title || "", startCharIndex: 0, page, special: "title" });
-        advanceCol();
-        // 作者: 通常列幅、ページ下部に配置（描画時にオフセット）
+        advanceCol(colWidthFor("title"));
         cols.push({ blockIndex: bi, field: "author", x: colX(px), chars: block.author || "", startCharIndex: 0, page, special: "author" });
-        advanceCol();
+        advanceCol(colWidthFor("author"));
         break;
 
       case "castList":
-        // 「登場人物」ラベル: 狭い列幅
         cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: "登場人物", startCharIndex: 0, page, special: "castLabel" });
-        advanceCol(CAST_COL_W);
-        // 各キャラクター: 狭い列幅で寄せる
-        for (let k = 0; k < block.characters.length; k++) {
-          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: block.characters[k].name, startCharIndex: k, page, special: "castChar" });
-          advanceCol(CAST_COL_W);
+        advanceCol(colWidthFor("castLabel"));
+        if (block.characters.length === 0) {
+          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: "", startCharIndex: 0, page, special: "castChar" });
+          advanceCol(colWidthFor("castChar"));
+        } else {
+          for (let k = 0; k < block.characters.length; k++) {
+            cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: block.characters[k].name, startCharIndex: k, page, special: "castChar" });
+            advanceCol(colWidthFor("castChar"));
+          }
         }
         break;
 
       case "togaki": {
-        // ト書き: 通常列幅だが小さいフォント → 1列に入る文字数が多い
         const togakiCharsPerCol = Math.floor(BODY_H / (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)));
         const text = block.text || "";
-        if (text.length === 0) {
-          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: "", startCharIndex: 0, page });
-          advanceCol();
-        } else {
-          for (let i = 0; i < text.length; i += togakiCharsPerCol) {
-            cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: text.slice(i, i + togakiCharsPerCol), startCharIndex: i, page });
-            advanceCol();
-          }
+        const lines = splitTextByNewline(text, togakiCharsPerCol);
+        for (const line of lines) {
+          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: line.chars, startCharIndex: line.startCharIndex, page });
+          advanceCol(colWidthFor());
+        }
+        break;
+      }
+
+      case "sceneHeading": {
+        const text = block.text || "";
+        const lines = splitTextByNewline(text, CHARS_PER_COL);
+        for (const line of lines) {
+          cols.push({ blockIndex: bi, field: "text", x: colX(px), chars: line.chars, startCharIndex: line.startCharIndex, page, special: "sceneHeading" });
+          advanceCol(colWidthFor("sceneHeading"));
         }
         break;
       }
@@ -160,14 +279,10 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
       default: {
         const fieldName = block.type === "serif" ? "speech" : "text";
         const text = block.type === "serif" ? (block.speech || "") : ((block as any).text || "");
-        if (text.length === 0) {
-          cols.push({ blockIndex: bi, field: fieldName as any, x: colX(px), chars: "", startCharIndex: 0, page });
-          advanceCol();
-        } else {
-          for (let i = 0; i < text.length; i += CHARS_PER_COL) {
-            cols.push({ blockIndex: bi, field: fieldName as any, x: colX(px), chars: text.slice(i, i + CHARS_PER_COL), startCharIndex: i, page });
-            advanceCol();
-          }
+        const lines = splitTextByNewline(text, CHARS_PER_COL);
+        for (const line of lines) {
+          cols.push({ blockIndex: bi, field: fieldName as any, x: colX(px), chars: line.chars, startCharIndex: line.startCharIndex, page });
+          advanceCol(colWidthFor());
         }
         break;
       }
@@ -223,13 +338,26 @@ export function drawScript(
     }
   }
 
-  // 区切り線
+  // 区切り線（セリフブロックの列がある区間のみ描画）
   ctx.strokeStyle = "#999";
   ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(M_LEFT, SEP_Y);
-  ctx.lineTo(PAGE_W - M_RIGHT, SEP_Y);
-  ctx.stroke();
+  let segStart: number | null = null;
+  for (const c of cols) {
+    if (c.page !== currentPage) continue;
+    const block = doc.blocks[c.blockIndex];
+    const isSerif = block?.type === "serif";
+    const left = c.x - COL_W / 2;
+    const right = c.x + COL_W / 2;
+    if (isSerif) {
+      if (segStart === null) segStart = right; // 右端から左へ広げる
+      segStart = Math.max(segStart, right);
+      // 一度区間を保留し、最後にまとめて描画する形でもよいが、簡易に1列ずつ線分を引く
+      ctx.beginPath();
+      ctx.moveTo(left, SEP_Y);
+      ctx.lineTo(right, SEP_Y);
+      ctx.stroke();
+    }
+  }
 
   // ページ番号
   if (cfg.showPageNumber) {
@@ -260,25 +388,37 @@ export function drawScript(
 
     // ─── 特殊列 ───
     if (col.special === "title") {
-      const fs = FONT_SIZE * 1.6;
-      if (col.chars.length === 0 && isActive) {
+      // タイトルは話者名エリアも使って大きく表示
+      const fs = FONT_SIZE * 2.0;
+      const lineH = fs + 8;
+      const TITLE_TOP = M_TOP + HEADER_H + 24;
+      const titleComposing = isActive && cursor?.field === "title" && composingText.length > 0;
+      if (col.chars.length === 0 && isActive && !titleComposing) {
         ctx.font = fontStr(fs * 0.6, cfg);
         ctx.fillStyle = "#ccc";
         const ph = "タイトル";
         for (let i = 0; i < ph.length; i++) {
           const cw = ctx.measureText(ph[i]).width;
-          ctx.fillText(ph[i], col.x - cw / 2, BODY_TOP + i * (fs * 0.6 + 4));
+          ctx.fillText(ph[i], col.x - cw / 2, TITLE_TOP + i * (fs * 0.6 + 4));
         }
       }
       ctx.font = fontStr(fs, cfg, true);
       ctx.fillStyle = "#111";
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + i * (fs + 6));
+        const shift = titleComposing && i >= cursor!.charIndex ? composingText.length : 0;
+        drawVerticalChar(ctx, ch, col.x, TITLE_TOP + (i + shift) * lineH, lineH, fs);
       }
       if (isActive && cursor?.field === "title") {
-        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + cursor.charIndex * (fs + 6), fs + 2, _cur);
+        if (titleComposing) {
+          for (let ci = 0; ci < composingText.length; ci++) {
+            const ch = composingText[ci];
+            const cy = TITLE_TOP + (cursor.charIndex + ci) * lineH;
+            drawVerticalChar(ctx, ch, col.x, cy, lineH, fs);
+            ctx.fillRect(col.x - fs / 2 - 2, cy + 2, 1, lineH - 4);
+          }
+        }
+        drawCursorLine(ctx, col.x - fs / 2, TITLE_TOP + (cursor.charIndex + composingText.length) * lineH, fs + 2, _cur);
       }
       continue;
     }
@@ -288,7 +428,8 @@ export function drawScript(
       ctx.font = fontStr(fs, cfg);
       ctx.fillStyle = "#555";
       const offsetY = BODY_H * 0.45;
-      if (col.chars.length === 0 && isActive) {
+      const authorComposing = isActive && cursor?.field === "author" && composingText.length > 0;
+      if (col.chars.length === 0 && isActive && !authorComposing) {
         ctx.fillStyle = "#ccc";
         const ph = "作者名";
         for (let i = 0; i < ph.length; i++) {
@@ -299,22 +440,58 @@ export function drawScript(
       }
       for (let i = 0; i < col.chars.length; i++) {
         const ch = col.chars[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + offsetY + i * lineH);
+        const shift = authorComposing && i >= cursor!.charIndex ? composingText.length : 0;
+        drawVerticalChar(ctx, ch, col.x, BODY_TOP + offsetY + (i + shift) * lineH, lineH, fs);
       }
       if (isActive && cursor?.field === "author") {
-        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + offsetY + cursor.charIndex * lineH, fs + 2, _cur);
+        if (authorComposing) {
+          ctx.fillStyle = "#555";
+          for (let ci = 0; ci < composingText.length; ci++) {
+            const ch = composingText[ci];
+            const cy = BODY_TOP + offsetY + (cursor.charIndex + ci) * lineH;
+            drawVerticalChar(ctx, ch, col.x, cy, lineH, fs);
+            ctx.fillRect(col.x - fs / 2 - 2, cy + 2, 1, lineH - 4);
+          }
+        }
+        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + offsetY + (cursor.charIndex + composingText.length) * lineH, fs + 2, _cur);
       }
       continue;
     }
     if (col.special === "castLabel" || col.special === "castChar") {
-      const fs = col.special === "castLabel" ? SPEAKER_FONT_SIZE : SPEAKER_FONT_SIZE;
+      const fs = SPEAKER_FONT_SIZE;
+      const lineH = fs + 3;
       ctx.font = fontStr(fs, cfg, col.special === "castLabel");
-      ctx.fillStyle = col.special === "castLabel" ? "#555" : "#333";
-      for (let i = 0; i < col.chars.length; i++) {
-        const ch = col.chars[i];
-        const cw = ctx.measureText(ch).width;
-        ctx.fillText(ch, col.x - cw / 2, BODY_TOP + i * (fs + 3));
+      const isCharActive = col.special === "castChar" && isActive && cursor?.castIndex === col.startCharIndex;
+      const composingHere = isCharActive && composingText.length > 0;
+
+      if (col.special === "castChar" && col.chars.length === 0 && !composingHere) {
+        ctx.fillStyle = "#ccc";
+        const ph = "人物名";
+        for (let i = 0; i < ph.length; i++) {
+          drawVerticalChar(ctx, ph[i], col.x, BODY_TOP + i * lineH, lineH, fs);
+        }
+      } else {
+        ctx.fillStyle = col.special === "castLabel" ? "#555" : "#333";
+        for (let i = 0; i < col.chars.length; i++) {
+          const ch = col.chars[i];
+          const shift = composingHere && i >= (cursor?.charIndex || 0) ? composingText.length : 0;
+          drawVerticalChar(ctx, ch, col.x, BODY_TOP + (i + shift) * lineH, lineH, fs);
+        }
+      }
+      // 未確定文字
+      if (composingHere) {
+        ctx.fillStyle = "#333";
+        for (let ci = 0; ci < composingText.length; ci++) {
+          const ch = composingText[ci];
+          const cy = BODY_TOP + ((cursor?.charIndex || 0) + ci) * lineH;
+          drawVerticalChar(ctx, ch, col.x, cy, lineH, fs);
+          ctx.fillRect(col.x - fs / 2 - 2, cy + 2, 1, lineH - 4);
+        }
+      }
+      // カーソル
+      if (isCharActive) {
+        const cli = (cursor?.charIndex || 0) + composingText.length;
+        drawCursorLine(ctx, col.x - fs / 2, BODY_TOP + cli * lineH, fs + 2, _cur);
       }
       continue;
     }
@@ -339,27 +516,78 @@ export function drawScript(
             const cw = ctx.measureText(ph[i]).width;
             ctx.fillText(ph[i], col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, phTop + i * (SPEAKER_FONT_SIZE * 0.8 + 2));
           }
+          // IME未確定: 空話者の場合は spBottom から下方向に積む
+          if (composingText) {
+            ctx.font = fontStr(SPEAKER_FONT_SIZE, cfg, true);
+            ctx.fillStyle = "#222";
+            for (let ci = 0; ci < composingText.length; ci++) {
+              const ch = composingText[ci];
+              const cw = ctx.measureText(ch).width;
+              ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spBottom - (composingText.length - ci) * (SPEAKER_FONT_SIZE + 2));
+            }
+          }
           drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spBottom, FONT_SIZE + 2, _cur);
         }
       } else {
         ctx.font = fontStr(spFontSize, cfg, true);
         ctx.fillStyle = "#222";
-        const spTop = spBottom - speaker.length * spCharH;
+        const speakerComposing = isActive && cursor?.field === "speaker" && composingText.length > 0;
+        const totalLen = speaker.length + (speakerComposing ? composingText.length : 0);
+        const spTop = spBottom - totalLen * spCharH;
         for (let i = 0; i < speaker.length; i++) {
           const ch = speaker[i];
-          const cw = ctx.measureText(ch).width;
-          ctx.fillText(ch, col.x - FONT_SIZE / 2 + (FONT_SIZE - cw) / 2, spTop + i * spCharH);
+          const shift = speakerComposing && i >= cursor!.charIndex ? composingText.length : 0;
+          drawVerticalChar(ctx, ch, col.x, spTop + (i + shift) * spCharH, spCharH, spFontSize);
         }
         if (isActive && cursor?.field === "speaker") {
-          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + cursor.charIndex * spCharH, FONT_SIZE + 2, _cur);
+          if (composingText) {
+            for (let ci = 0; ci < composingText.length; ci++) {
+              const ch = composingText[ci];
+              const cy = spTop + (cursor.charIndex + ci) * spCharH;
+              drawVerticalChar(ctx, ch, col.x, cy, spCharH, spFontSize);
+              ctx.fillRect(col.x - FONT_SIZE / 2 - 2, cy + 2, 1, spCharH - 4);
+            }
+          }
+          drawCursorLine(ctx, col.x - FONT_SIZE / 2 - 1, spTop + (cursor.charIndex + composingText.length) * spCharH, FONT_SIZE + 2, _cur);
         }
       }
     }
 
+    // ─── 場面ヘッダー（大きく、上に区切り線） ───
+    if (col.special === "sceneHeading") {
+      const fs = Math.round(FONT_SIZE * 1.35);
+      const lineH = fs + 8;
+      // 上部の罫線
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(col.x - COL_W / 2 + 4, BODY_TOP - 4);
+      ctx.lineTo(col.x + COL_W / 2 - 4, BODY_TOP - 4);
+      ctx.stroke();
+      ctx.font = fontStr(fs, cfg, true);
+      ctx.fillStyle = "#111";
+      const startY = BODY_TOP + 12;
+      for (let i = 0; i < col.chars.length; i++) {
+        drawVerticalChar(ctx, col.chars[i], col.x, startY + i * lineH, lineH, fs);
+      }
+      if (isActive && cursor?.field === "text") {
+        const li = cursor.charIndex - col.startCharIndex;
+        if (li >= 0 && li <= col.chars.length) {
+          drawCursorLine(ctx, col.x - fs / 2 - 1, startY + li * lineH, fs + 2, _cur);
+        }
+      }
+      continue;
+    }
+
     // ─── 選択ハイライト + 本文 ───
-    const isTg = block.type === "togaki" || block.type === "setting";
-    const fs = isTg ? TOGAKI_FONT_SIZE : FONT_SIZE;
-    const cH = isTg ? (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)) : CHAR_H;
+    const isTg = block.type === "togaki";
+    const isSerif = block.type === "serif";
+    const fs = isTg ? TOGAKI_FONT_SIZE : isSerif ? SERIF_FONT_SIZE : FONT_SIZE;
+    const cH = isTg
+      ? TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)
+      : isSerif
+        ? Math.round(SERIF_FONT_SIZE * LINE_PITCH_RATIO)
+        : CHAR_H;
     const indent = isTg ? TOGAKI_INDENT_CHARS * CHAR_H : 0;
 
     // 選択ハイライト描画
@@ -380,13 +608,12 @@ export function drawScript(
     }
 
     // 本文テキスト描画
-    ctx.font = isTg ? fontStr(TOGAKI_FONT_SIZE, cfg) : bodyFont;
+    ctx.font = fontStr(fs, cfg);
     if (col.chars.length === 0 && isActive && col.startCharIndex === 0) {
       // 空フィールドのプレースホルダー
       const placeholders: Record<string, string> = {
         serif: "セリフ",
         togaki: "ト書き",
-        setting: "舞台設定",
         sceneHeading: "場面",
         endMark: "おわり",
       };
@@ -400,36 +627,39 @@ export function drawScript(
         }
       }
     }
-    ctx.font = isTg ? fontStr(TOGAKI_FONT_SIZE, cfg) : bodyFont;
+    ctx.font = fontStr(fs, cfg);
     ctx.fillStyle = isTg ? "#333" : "#1a1a1a";
+    // composing中はカーソル位置以降の文字を下にずらす
+    const composingActive = composingText && isActive && (cursor?.field === "speech" || cursor?.field === "text");
+    const composingOffsetIdx = composingActive ? (cursor!.charIndex - col.startCharIndex) : -1;
     for (let i = 0; i < col.chars.length; i++) {
       const ch = col.chars[i];
-      const cw = ctx.measureText(ch).width;
-      ctx.fillText(ch, col.x - fs / 2 + (fs - cw) / 2, BODY_TOP + indent + i * cH);
+      const shift = composingOffsetIdx >= 0 && i >= composingOffsetIdx ? composingText.length : 0;
+      drawVerticalChar(ctx, ch, col.x, BODY_TOP + indent + (i + shift) * cH, cH, fs);
     }
 
-    // カーソル描画
-    if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
+    // 入力中テキスト（本文と同色＋下線で区別、後続文字は既にshiftで押し下げ済み）
+    if (composingText && isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
       const li = cursor.charIndex - col.startCharIndex;
-      if (li >= 0 && li <= col.chars.length && (li < CHARS_PER_COL || col.chars.length < CHARS_PER_COL)) {
-        drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + li * cH, fs + 2, _cur);
+      if (li >= 0 && li <= col.chars.length) {
+        ctx.font = fontStr(fs, cfg);
+        ctx.fillStyle = isTg ? "#333" : "#1a1a1a";
+        for (let ci = 0; ci < composingText.length; ci++) {
+          const ch = composingText[ci];
+          const cy = BODY_TOP + indent + (li + ci) * cH;
+          drawVerticalChar(ctx, ch, col.x, cy, cH, fs);
+          // 縦書き未確定下線（文字の左側に薄い線）
+          ctx.fillRect(col.x - fs / 2 - 2, cy + 2, 1, cH - 4);
+        }
       }
     }
 
-    // 入力中テキスト（下線付きリアルタイム表示）
-    if (composingText && isActive && (cursor?.field === "speech" || cursor?.field === "text" || cursor?.field === "speaker")) {
+    // カーソル描画（未確定中は未確定文字の末尾に表示）
+    if (isActive && (cursor?.field === "speech" || cursor?.field === "text")) {
       const li = cursor.charIndex - col.startCharIndex;
-      if (li >= 0 && li <= col.chars.length) {
-        ctx.font = bodyFont;
-        ctx.fillStyle = "#2563eb";
-        for (let ci = 0; ci < composingText.length; ci++) {
-          const ch = composingText[ci];
-          const cw = ctx.measureText(ch).width;
-          const cy = BODY_TOP + indent + (li + ci) * cH;
-          ctx.fillText(ch, col.x - fs / 2 + (fs - cw) / 2, cy);
-          // 下線
-          ctx.fillRect(col.x - fs / 2, cy + cH - 2, fs, 1);
-        }
+      const cursorLi = composingText ? li + composingText.length : li;
+      if (li >= 0 && cursorLi <= col.chars.length + (composingText?.length || 0)) {
+        drawCursorLine(ctx, col.x - fs / 2 - 1, BODY_TOP + indent + cursorLi * cH, fs + 2, _cur);
       }
     }
 
@@ -461,6 +691,18 @@ export function drawScript(
     ctx.lineTo(dropX, PAGE_H - M_BOTTOM);
     ctx.stroke();
   }
+}
+
+/** 任意のブロック（castList含む）に対するヒットテスト。右クリックメニュー等の「ブロック単位の操作」用 */
+export function hitTestScriptAnyBlock(cols: ColLayout[], mx: number, currentPage: number): number | null {
+  let bestCol: ColLayout | null = null;
+  let bestDist = Infinity;
+  for (const col of cols) {
+    if (col.page !== currentPage) continue;
+    const dist = Math.abs(mx - col.x);
+    if (dist < bestDist) { bestDist = dist; bestCol = col; }
+  }
+  return bestCol ? bestCol.blockIndex : null;
 }
 
 /** 縦書きモード: ドロップ先インデックス */
@@ -499,7 +741,17 @@ export function hitTestScript(
 
   if (bestCol.special === "title") return { blockIndex: bestCol.blockIndex, field: "title", charIndex: bestCol.chars.length };
   if (bestCol.special === "author") return { blockIndex: bestCol.blockIndex, field: "author", charIndex: bestCol.chars.length };
-  if (bestCol.special === "castLabel" || bestCol.special === "castChar") return null;
+  if (bestCol.special === "castLabel") {
+    // ラベル列クリック → 0番目の人物を編集
+    return { blockIndex: bestCol.blockIndex, field: "text", charIndex: 0, castIndex: 0 };
+  }
+  if (bestCol.special === "castChar") {
+    // 文字位置までヒット
+    const fs = SPEAKER_FONT_SIZE;
+    const charY = my - BODY_TOP;
+    const ci = Math.max(0, Math.min(bestCol.chars.length, Math.round(charY / (fs + 3))));
+    return { blockIndex: bestCol.blockIndex, field: "text", charIndex: ci, castIndex: bestCol.startCharIndex };
+  }
 
   if (my < SEP_Y && block.type === "serif") {
     // 空の話者名でも区切り線の上をクリックしたらspeakerフィールドに移動
@@ -523,7 +775,7 @@ export function hitTestScript(
   }
 
   // ト書きはインデントとフォントサイズが異なる
-  const isTg = block.type === "togaki" || block.type === "setting";
+  const isTg = block.type === "togaki";
   const tCharH = isTg ? (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)) : CHAR_H;
   const tIndent = isTg ? TOGAKI_INDENT_CHARS * CHAR_H : 0;
   const li = Math.min(Math.floor((my - BODY_TOP - tIndent) / tCharH), bestCol.chars.length);

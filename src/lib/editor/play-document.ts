@@ -20,12 +20,6 @@ export type CastListBlock = {
   characters: { name: string; description: string }[];
 };
 
-/** 舞台設定ブロック（場所・季節・時間等） */
-export type SettingBlock = {
-  type: "setting";
-  text: string; // 例: "夏・和室。"
-};
-
 /** 場面見出し（幕・場の区切り） */
 export type SceneHeadingBlock = {
   type: "sceneHeading";
@@ -55,7 +49,6 @@ export type EndMarkBlock = {
 export type Block =
   | TitleBlock
   | CastListBlock
-  | SettingBlock
   | SceneHeadingBlock
   | SerifBlock
   | TogakiBlock
@@ -118,6 +111,8 @@ export type CursorPosition = {
   blockIndex: number;
   field: "speaker" | "speech" | "text" | "direction" | "title" | "author";
   charIndex: number;
+  /** castList編集時、何番目の人物名にいるか。未指定はラベル列。 */
+  castIndex?: number;
 };
 
 export const EMPTY_DOC: PlayDocument = {
@@ -195,8 +190,6 @@ export function toPlainText(doc: PlayDocument): string {
           return `${b.title}\n${b.author}`;
         case "castList":
           return `登場人物\n${b.characters.map((c) => `${c.name}　${c.description}`).join("\n")}`;
-        case "setting":
-          return b.text;
         case "sceneHeading":
           return `【${b.text}】`;
         case "serif": {
@@ -219,7 +212,6 @@ export function blockLabel(type: Block["type"]): string {
   const labels: Record<Block["type"], string> = {
     title: "タイトル",
     castList: "登場人物",
-    setting: "舞台設定",
     sceneHeading: "場面",
     serif: "セリフ",
     togaki: "ト書き",

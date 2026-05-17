@@ -20,6 +20,7 @@ import {
   hitTestScript,
   getMaxPage,
   findScriptDropIndex,
+  hitTestScriptAnyBlock,
   PAGE_W,
   PAGE_H,
   COL_W,
@@ -40,7 +41,8 @@ type Props = {
 };
 
 export function CanvasEditor({ playId, initialContent }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null); // 横書きモード用
+  const scriptCanvasRefs = useRef<Map<number, HTMLCanvasElement>>(new Map());
   const inputRef = useRef<HTMLInputElement>(null);
   const [doc, setDoc] = useState<PlayDocument>(() =>
     initialContent ? fromBodyJson(initialContent) : EMPTY_DOC
@@ -51,7 +53,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   // 選択範囲: selAnchorがnullでなければ、anchor～cursorが選択範囲
   const [selAnchor, setSelAnchor] = useState<CursorPosition | null>(null);
   const [mode, setMode] = useState<EditorMode>("script");
-  const [currentPage, setCurrentPage] = useState(0);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [showPanel, setShowPanel] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -149,16 +150,36 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [doc.blocks.length, pushHistory, updateDoc]
   );
 
-  // ブロック削除
+  // ブロック更新（任意フィールド書き換え用、castList characters編集等）
+  const updateBlockAt = useCallback(
+    (index: number, updater: (b: Block) => Block) => {
+      pushHistory();
+      updateDoc((d) => {
+        const nb = [...d.blocks];
+        if (nb[index]) nb[index] = updater(nb[index]);
+        return { ...d, blocks: nb };
+      });
+    },
+    [pushHistory, updateDoc]
+  );
+
+  // ブロック削除（最後の1ブロックになる場合は空のセリフブロックを残す）
   const deleteBlock = useCallback(
     (index: number) => {
-      if (doc.blocks.length <= 1) return;
       pushHistory();
-      updateDoc((d) => ({ ...d, blocks: d.blocks.filter((_, i) => i !== index) }));
+      updateDoc((d) => {
+        const filtered = d.blocks.filter((_, i) => i !== index);
+        const blocks = filtered.length === 0
+          ? [{ type: "serif", speaker: "", speech: "" } as Block]
+          : filtered;
+        return { ...d, blocks };
+      });
       setCursor((c) => ({
-        ...c,
-        blockIndex: Math.min(c.blockIndex, doc.blocks.length - 2),
+        blockIndex: Math.max(0, Math.min(c.blockIndex, doc.blocks.length - 2)),
+        field: "speaker",
+        charIndex: 0,
       }));
+      setSelAnchor(null);
     },
     [doc.blocks.length, pushHistory, updateDoc]
   );
@@ -238,47 +259,68 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
   // 描画
   const redraw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
     // 選択範囲を計算
     const sel: SelectionRange = selAnchor && selAnchor.blockIndex === cursor.blockIndex && selAnchor.field === cursor.field
       ? { blockIndex: cursor.blockIndex, field: cursor.field, start: Math.min(selAnchor.charIndex, cursor.charIndex), end: Math.max(selAnchor.charIndex, cursor.charIndex) }
       : null;
 
-    const out = cursorOutRef.current;
-    out.rect = null;
-
     if (mode === "script") {
-      canvas.width = PAGE_W;
-      canvas.height = PAGE_H;
+      // 全ページ描画。カーソルが含まれるページのみcursorOutに位置を書き込む
       const cols = computeColumns(doc);
       colsRef.current = cols;
-      drawScript(ctx, doc, cols, cursor, currentPage, sel, scriptDrag, composingText, out);
+      // カーソルが居るページを特定
+      let cursorPage = 0;
+      for (const c of cols) {
+        if (c.blockIndex === cursor.blockIndex && (c.field === cursor.field || c.special)) {
+          if (cursor.charIndex >= c.startCharIndex && cursor.charIndex <= c.startCharIndex + c.chars.length) {
+            cursorPage = c.page;
+            break;
+          }
+        }
+      }
+      let cursorScreenRect: { x: number; y: number; h: number; canvas: HTMLCanvasElement } | null = null;
+      scriptCanvasRefs.current.forEach((canvas, page) => {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        canvas.width = PAGE_W;
+        canvas.height = PAGE_H;
+        const out = { rect: null as any };
+        drawScript(ctx, doc, cols, cursor, page, sel, scriptDrag, composingText, out);
+        if (page === cursorPage && out.rect) {
+          cursorScreenRect = { x: out.rect.x, y: out.rect.y, h: out.rect.h, canvas };
+        }
+      });
+      if (cursorScreenRect) {
+        const { x, y, h, canvas } = cursorScreenRect as any;
+        const rect = canvas.getBoundingClientRect();
+        const sx = rect.width / canvas.width;
+        const sy = rect.height / canvas.height;
+        setInputPos({ left: rect.left + x * sx, top: rect.top + y * sy, height: Math.max(20, h * sy) });
+      } else {
+        setInputPos(null);
+      }
     } else {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const out = cursorOutRef.current;
+      out.rect = null;
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
       drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, composingText, out);
+      const rect = canvas.getBoundingClientRect();
+      const cr = out.rect;
+      if (cr) {
+        const sx = rect.width / canvas.width;
+        const sy = rect.height / canvas.height;
+        setInputPos({ left: rect.left + cr.x * sx, top: rect.top + cr.y * sy, height: Math.max(20, cr.h * sy) });
+      } else {
+        setInputPos(null);
+      }
     }
-
-    // カーソルのキャンバス座標 → 画面座標へ変換してinput位置に反映
-    const rect = canvas.getBoundingClientRect();
-    const cr = out.rect;
-    if (cr) {
-      const sx = rect.width / canvas.width;
-      const sy = rect.height / canvas.height;
-      setInputPos({
-        left: rect.left + cr.x * sx,
-        top: rect.top + cr.y * sy,
-        height: Math.max(20, cr.h * sy),
-      });
-    } else {
-      setInputPos(null);
-    }
-  }, [doc, cursor, selAnchor, containerSize, mode, currentPage, blockDrag, scriptDrag, composingText]);
+  }, [doc, cursor, selAnchor, containerSize, mode, blockDrag, scriptDrag, composingText]);
 
   useEffect(() => { redraw(); }, [redraw]);
   useEffect(() => { document.fonts.ready.then(() => redraw()); }, [redraw]);
@@ -312,6 +354,26 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     const d = docRef.current;
     const block = d.blocks[cur.blockIndex];
     if (!block) return;
+    // castListはcastIndexで指定された人物名にテキストを挿入
+    if (block.type === "castList") {
+      const idx = cur.castIndex ?? 0;
+      pushHistory();
+      setSelAnchor(null);
+      updateDoc((dd) => {
+        const nb = [...dd.blocks];
+        const b = { ...nb[cur.blockIndex] } as any;
+        const characters = [...(b.characters || [])];
+        while (characters.length <= idx) characters.push({ name: "", description: "" });
+        const cur_name = characters[idx].name || "";
+        const new_name = cur_name.slice(0, cur.charIndex) + text + cur_name.slice(cur.charIndex);
+        characters[idx] = { ...characters[idx], name: new_name };
+        b.characters = characters;
+        nb[cur.blockIndex] = b;
+        return { ...dd, blocks: nb };
+      });
+      setCursor({ ...cur, charIndex: cur.charIndex + text.length });
+      return;
+    }
     const fieldText = (() => {
       switch (block.type) {
         case "title": return cur.field === "title" ? block.title : cur.field === "author" ? block.author : "";
@@ -359,21 +421,24 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     return () => document.removeEventListener("copy", handleCopy);
   }, [getSelectionText]);
 
-  // マウス座標 → カーソル位置
+  // マウス座標 → カーソル位置（クリックされたcanvasから直接読み取る）
+  const pageOf = (e: React.MouseEvent<HTMLCanvasElement>): number => {
+    const p = (e.currentTarget as HTMLCanvasElement).dataset.page;
+    return p ? Number(p) : 0;
+  };
   const hitTest = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): CursorPosition | null => {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
+      const canvas = e.currentTarget as HTMLCanvasElement;
       const rect = canvas.getBoundingClientRect();
       const cw = mode === "script" ? PAGE_W : containerSize.w;
       const ch = mode === "script" ? PAGE_H : containerSize.h;
       const mx = (e.clientX - rect.left) * (cw / rect.width);
       const my = (e.clientY - rect.top) * (ch / rect.height);
       return mode === "script"
-        ? hitTestScript(doc, colsRef.current, mx, my, currentPage)
+        ? hitTestScript(doc, colsRef.current, mx, my, pageOf(e))
         : hitTestHorizontal(doc, mx, my);
     },
-    [doc, containerSize, mode, currentPage]
+    [doc, containerSize, mode]
   );
 
   const isDraggingRef = useRef(false);
@@ -388,31 +453,29 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       setContextMenu(null);
       inputRef.current?.focus();
 
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
+      const canvas = e.currentTarget as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
 
-        if (mode === "horizontal") {
-          const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
-          if (mx < H_DRAG_HANDLE_W) {
-            const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
-            const pos = hitTestHorizontal(doc, mx + 40, my);
-            if (pos) {
-              blockDragRef.current = { index: pos.blockIndex, mode: "h" };
-              setBlockDrag({ draggingIndex: pos.blockIndex, mouseY: my });
-              return;
-            }
+      if (mode === "horizontal") {
+        const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
+        if (mx < H_DRAG_HANDLE_W) {
+          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+          const pos = hitTestHorizontal(doc, mx + 40, my);
+          if (pos) {
+            blockDragRef.current = { index: pos.blockIndex, mode: "h" };
+            setBlockDrag({ draggingIndex: pos.blockIndex, mouseY: my });
+            return;
           }
-        } else {
-          const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
-          const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
-          if (my < M_TOP + HEADER_H + 12) {
-            const pos = hitTestScript(doc, colsRef.current, mx, my, currentPage);
-            if (pos) {
-              blockDragRef.current = { index: pos.blockIndex, mode: "v" };
-              setScriptDrag({ draggingIndex: pos.blockIndex, mouseX: mx });
-              return;
-            }
+        }
+      } else {
+        const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+        const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
+        if (my < M_TOP + HEADER_H + 12) {
+          const pos = hitTestScript(doc, colsRef.current, mx, my, pageOf(e));
+          if (pos) {
+            blockDragRef.current = { index: pos.blockIndex, mode: "v" };
+            setScriptDrag({ draggingIndex: pos.blockIndex, mouseX: mx });
+            return;
           }
         }
       }
@@ -441,35 +504,29 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   // mousemove: テキスト選択 or ブロックドラッグ + カーソル切替
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = e.currentTarget as HTMLCanvasElement;
       // ブロックドラッグ中
       if (blockDragRef.current) {
         setCanvasCursor(CURSOR_GRABBING);
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const rect = canvas.getBoundingClientRect();
-          if (blockDragRef.current.mode === "h") {
-            const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
-            setBlockDrag({ draggingIndex: blockDragRef.current.index, mouseY: my });
-          } else {
-            const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
-            setScriptDrag({ draggingIndex: blockDragRef.current.index, mouseX: mx });
-          }
+        const rect = canvas.getBoundingClientRect();
+        if (blockDragRef.current.mode === "h") {
+          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+          setBlockDrag({ draggingIndex: blockDragRef.current.index, mouseY: my });
+        } else {
+          const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+          setScriptDrag({ draggingIndex: blockDragRef.current.index, mouseX: mx });
         }
         return;
       }
       // テキスト選択（ドラッグで範囲拡張）
       if (!isDraggingRef.current) {
-        // カーソル形状の切替（ハンドル領域 vs テキスト領域）
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const rect = canvas.getBoundingClientRect();
-          if (mode === "horizontal") {
-            const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
-            setCanvasCursor(mx < H_DRAG_HANDLE_W ? CURSOR_GRAB : CURSOR_PEN);
-          } else {
-            const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
-            setCanvasCursor(my < M_TOP + HEADER_H + 12 ? CURSOR_GRAB : CURSOR_PEN);
-          }
+        const rect = canvas.getBoundingClientRect();
+        if (mode === "horizontal") {
+          const mx = (e.clientX - rect.left) * (containerSize.w / rect.width);
+          setCanvasCursor(mx < H_DRAG_HANDLE_W ? CURSOR_GRAB : CURSOR_PEN);
+        } else {
+          const my = (e.clientY - rect.top) * (PAGE_H / rect.height);
+          setCanvasCursor(my < M_TOP + HEADER_H + 12 ? CURSOR_GRAB : CURSOR_PEN);
         }
         return;
       }
@@ -489,12 +546,31 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   );
 
   // 右クリック: コンテキストメニュー
+  // 選択範囲がある場合: カーソル位置を変更しない（選択を保持）
+  // 選択範囲がない場合: 右クリック位置のブロックにカーソル移動（castList等の編集不可ブロックも含む）
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       e.preventDefault();
+      const hasSelection = selAnchor && (selAnchor.blockIndex !== cursor.blockIndex || selAnchor.field !== cursor.field || selAnchor.charIndex !== cursor.charIndex);
+      if (!hasSelection) {
+        const pos = hitTest(e);
+        if (pos) {
+          setCursor(pos);
+          setSelAnchor(null);
+        } else if (mode === "script") {
+          const canvas = e.currentTarget as HTMLCanvasElement;
+          const rect = canvas.getBoundingClientRect();
+          const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+          const bi = hitTestScriptAnyBlock(colsRef.current, mx, pageOf(e));
+          if (bi !== null) {
+            setCursor({ blockIndex: bi, field: "text", charIndex: 0 });
+            setSelAnchor(null);
+          }
+        }
+      }
       setContextMenu({ x: e.clientX, y: e.clientY });
     },
-    []
+    [hitTest, selAnchor, cursor, mode]
   );
 
   const ctxMenuCopy = useCallback(() => {
@@ -544,23 +620,21 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       // ブロックドロップ
       if (blockDragRef.current) {
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const rect = canvas.getBoundingClientRect();
-          const fromIdx = blockDragRef.current.index;
+        const canvas = e.currentTarget as HTMLCanvasElement;
+        const rect = canvas.getBoundingClientRect();
+        const fromIdx = blockDragRef.current.index;
 
-          if (blockDragRef.current.mode === "h" && blockDrag) {
-            const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
-            const dropIdx = findDropIndex(doc, my);
-            if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
-              reorderBlock(fromIdx, dropIdx > fromIdx ? dropIdx - 1 : dropIdx);
-            }
-          } else if (blockDragRef.current.mode === "v" && scriptDrag) {
-            const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
-            const dropIdx = findScriptDropIndex(colsRef.current, mx, currentPage);
-            if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
-              reorderBlock(fromIdx, dropIdx > fromIdx ? dropIdx - 1 : dropIdx);
-            }
+        if (blockDragRef.current.mode === "h" && blockDrag) {
+          const my = (e.clientY - rect.top) * (containerSize.h / rect.height);
+          const dropIdx = findDropIndex(doc, my);
+          if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
+            reorderBlock(fromIdx, dropIdx > fromIdx ? dropIdx - 1 : dropIdx);
+          }
+        } else if (blockDragRef.current.mode === "v" && scriptDrag) {
+          const mx = (e.clientX - rect.left) * (PAGE_W / rect.width);
+          const dropIdx = findScriptDropIndex(colsRef.current, mx, pageOf(e));
+          if (fromIdx !== dropIdx && fromIdx !== dropIdx - 1) {
+            reorderBlock(fromIdx, dropIdx > fromIdx ? dropIdx - 1 : dropIdx);
           }
         }
         blockDragRef.current = null;
@@ -572,12 +646,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       isDraggingRef.current = false;
       dragAnchorRef.current = null;
-      // ドラッグなしでクリックだけの場合は選択解除
       if (selAnchor && selAnchor.charIndex === cursor.charIndex) {
         setSelAnchor(null);
       }
     },
-    [selAnchor, cursor, blockDrag, scriptDrag, containerSize, doc, reorderBlock, currentPage]
+    [selAnchor, cursor, blockDrag, scriptDrag, containerSize, doc, reorderBlock]
   );
 
   // キーボード
@@ -613,26 +686,102 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const block = doc.blocks[blockIndex];
       if (!block) return;
 
+      // Shift+Enter: ブロック内改行
+      if (e.key === "Enter" && e.shiftKey) {
+        e.preventDefault();
+        if (block.type === "castList") return; // castListは対象外
+        insertTextAtCursor("\n");
+        return;
+      }
       if (e.key === "Enter") {
         e.preventDefault();
         pushHistory();
-        if (block.type === "title" && field === "title") {
-          setCursor({ blockIndex, field: "author", charIndex: 0 });
-        } else if (block.type === "serif" && field === "speaker") {
-          setCursor({ blockIndex, field: "speech", charIndex: 0 });
-        } else {
+        if (block.type === "castList") {
+          // Enter: 次の人物へ（末尾なら新規追加）
+          const idx = cursor.castIndex ?? 0;
+          const nextIdx = idx + 1;
           updateDoc((d) => {
             const nb = [...d.blocks];
-            nb.splice(blockIndex + 1, 0, { type: "serif", speaker: "", speech: "" });
+            const b = { ...nb[blockIndex] } as any;
+            const characters = [...(b.characters || [])];
+            while (characters.length <= nextIdx) characters.push({ name: "", description: "" });
+            b.characters = characters;
+            nb[blockIndex] = b;
             return { ...d, blocks: nb };
           });
-          setCursor({ blockIndex: blockIndex + 1, field: "speaker", charIndex: 0 });
+          setCursor({ ...cursor, castIndex: nextIdx, charIndex: 0 });
+          return;
         }
+        if (block.type === "title" && field === "title") {
+          setCursor({ blockIndex, field: "author", charIndex: 0 });
+          return;
+        }
+        if (block.type === "serif" && field === "speaker") {
+          setCursor({ blockIndex, field: "speech", charIndex: 0 });
+          return;
+        }
+        // 共通: 末尾なら同種別の新規ブロックを下に追加、途中なら分割
+        const fullText = getFieldText(cursor);
+        const pre = fullText.slice(0, charIndex);
+        const post = fullText.slice(charIndex);
+        // 新規ブロックの生成
+        const makeBlock = (text: string): Block => {
+          switch (block.type) {
+            case "togaki": return { type: "togaki", text };
+            case "sceneHeading": return { type: "sceneHeading", text };
+            case "endMark": return { type: "endMark", text };
+            case "serif": return { type: "serif", speaker: "", speech: text };
+            default: return { type: "serif", speaker: "", speech: text };
+          }
+        };
+        updateDoc((d) => {
+          const nb = [...d.blocks];
+          // 既存ブロックの末尾を分割（preを残す）
+          const cur_b = { ...nb[blockIndex] } as any;
+          if (cur_b.type === "serif") cur_b.speech = pre;
+          else cur_b.text = pre;
+          nb[blockIndex] = cur_b;
+          // 後続をpostで新規ブロックに
+          nb.splice(blockIndex + 1, 0, makeBlock(post));
+          return { ...d, blocks: nb };
+        });
+        const newField: CursorPosition["field"] = block.type === "serif" ? "speech" : "text";
+        setCursor({ blockIndex: blockIndex + 1, field: newField, charIndex: 0 });
         return;
       }
 
       if (e.key === "Backspace") {
         e.preventDefault();
+        if (block.type === "castList") {
+          pushHistory();
+          const idx = cursor.castIndex ?? 0;
+          const name = block.characters[idx]?.name || "";
+          if (charIndex > 0) {
+            const newName = name.slice(0, charIndex - 1) + name.slice(charIndex);
+            updateDoc((d) => {
+              const nb = [...d.blocks];
+              const b = { ...nb[blockIndex] } as any;
+              const characters = [...(b.characters || [])];
+              characters[idx] = { ...characters[idx], name: newName };
+              b.characters = characters;
+              nb[blockIndex] = b;
+              return { ...d, blocks: nb };
+            });
+            setCursor({ ...cursor, charIndex: charIndex - 1 });
+          } else if (name === "" && idx > 0) {
+            // 空の人物を削除して前の人物末尾へ
+            updateDoc((d) => {
+              const nb = [...d.blocks];
+              const b = { ...nb[blockIndex] } as any;
+              b.characters = (b.characters || []).filter((_: any, i: number) => i !== idx);
+              nb[blockIndex] = b;
+              return { ...d, blocks: nb };
+            });
+            const prevName = block.characters[idx - 1]?.name || "";
+            setCursor({ ...cursor, castIndex: idx - 1, charIndex: prevName.length });
+          }
+          return;
+        }
         // 選択範囲がある場合はまず削除
         const delResult = deleteSelection();
         if (delResult !== null) {
@@ -770,7 +919,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   );
 
   // ページ操作
-  const maxPage = mode === "script" ? getMaxPage(colsRef.current) : 0;
+  // 全ページ数。docから直接計算してJSXに渡す（renderと描画のレース回避）
+  const maxPage = mode === "script" ? getMaxPage(computeColumns(doc)) : 0;
   const statusLabel = saveStatus === "idle" ? "" : saveStatus === "saving" ? "保存中..." : saveStatus === "error" ? "保存エラー" : "保存済み";
 
   return (
@@ -784,10 +934,11 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
         <div className="mx-1 h-4 w-px bg-gray-200" />
 
+        <ToolBtn label="タイトル" onClick={() => insertBlock({ type: "title", title: "", author: "" })} />
+        <ToolBtn label="登場人物" onClick={() => insertBlock({ type: "castList", characters: [] })} />
+        <ToolBtn label="場面" onClick={() => insertBlock({ type: "sceneHeading", text: "" })} />
         <ToolBtn label="セリフ" shortcut="Enter" onClick={() => insertBlock({ type: "serif", speaker: "", speech: "" })} />
         <ToolBtn label="ト書き" onClick={() => insertBlock({ type: "togaki", text: "" })} />
-        <ToolBtn label="場面" onClick={() => insertBlock({ type: "sceneHeading", text: "" })} />
-        <ToolBtn label="舞台設定" onClick={() => insertBlock({ type: "setting", text: "" })} />
         <ToolBtn label="終幕" onClick={() => insertBlock({ type: "endMark", text: "おわり" })} />
 
         <div className="mx-1 h-4 w-px bg-gray-200" />
@@ -798,23 +949,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
         <div className="flex-1" />
 
-        {/* ページ送り（台本モード） */}
         {mode === "script" && maxPage > 0 && (
-          <div className="flex items-center gap-1 mr-3">
-            <button type="button" onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-              className="px-1.5 py-0.5 text-xs rounded disabled:text-gray-300 text-gray-600 hover:bg-gray-100">
-              ◀
-            </button>
-            <span className="text-xs text-gray-500">{currentPage + 1}/{maxPage + 1}</span>
-            <button type="button" onClick={() => setCurrentPage((p) => Math.min(maxPage, p + 1))}
-              disabled={currentPage === maxPage}
-              className="px-1.5 py-0.5 text-xs rounded disabled:text-gray-300 text-gray-600 hover:bg-gray-100">
-              ▶
-            </button>
-          </div>
+          <span className="text-xs text-gray-400 mr-3">{maxPage + 1}ページ</span>
         )}
-
         <span className="text-xs text-gray-400">{doc.blocks.length}ブロック</span>
         {statusLabel && (
           <span className={`text-xs ml-3 ${saveStatus === "error" ? "text-red-500" : "text-gray-400"}`}>{statusLabel}</span>
@@ -854,8 +991,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         }}
         style={{
           position: "fixed",
-          left: inputPos ? inputPos.left : -9999,
-          top: inputPos ? inputPos.top : 0,
+          left: inputPos ? inputPos.left : 10,
+          top: inputPos ? inputPos.top : 10,
           width: 2,
           height: inputPos ? inputPos.height : 20,
           fontSize: 16,
@@ -866,6 +1003,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           background: "transparent",
           color: "transparent",
           caretColor: "transparent",
+          opacity: 0.01,
           zIndex: 10,
         }}
         autoFocus
@@ -873,38 +1011,113 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
-        <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-hidden flex items-start justify-center">
+        <div ref={containerRef} className="relative flex-1 bg-gray-100 overflow-auto flex flex-col items-center py-4 gap-4">
           {mode === "script" ? (
-            <div className="origin-top mt-2 shadow-lg" style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})` }}>
-              <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}
- style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor }} />
-            </div>
+            Array.from({ length: maxPage + 1 }, (_, page) => (
+              <div
+                key={page}
+                className="shadow-lg shrink-0"
+                style={{ width: PAGE_W * scriptScale, height: PAGE_H * scriptScale }}
+              >
+                <div style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scriptScale})`, transformOrigin: "top left" }}>
+                  <canvas
+                    ref={(el) => {
+                      if (el) scriptCanvasRefs.current.set(page, el);
+                      else scriptCanvasRefs.current.delete(page);
+                    }}
+                    data-page={page}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onContextMenu={handleContextMenu}
+                    style={{ width: PAGE_W, height: PAGE_H, cursor: canvasCursor, background: "#fff" }}
+                  />
+                </div>
+              </div>
+            ))
           ) : (
             <canvas ref={canvasRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}
  className="absolute inset-0" style={{ width: "100%", height: "100%", cursor: canvasCursor }} />
           )}
         </div>
         {/* コンテキストメニュー */}
-        {contextMenu && (
-          <div
-            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button type="button" onClick={ctxMenuCopy}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
-              コピー
+        {contextMenu && (() => {
+          const hasSelection = !!(selAnchor && (selAnchor.blockIndex !== cursor.blockIndex || selAnchor.field !== cursor.field || selAnchor.charIndex !== cursor.charIndex));
+          const curBlock = doc.blocks[cursor.blockIndex];
+          const curType = curBlock?.type;
+          const close = () => setContextMenu(null);
+          const insertAfter = (b: Block) => { insertBlock(b); close(); };
+          const changeTo = (t: Block["type"]) => { changeBlockType(cursor.blockIndex, t); close(); };
+          const MenuItem = ({ label, onClick, danger, shortcut }: { label: string; onClick: () => void; danger?: boolean; shortcut?: string }) => (
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onClick}
+              className={`flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-sm ${danger ? "text-red-600 hover:bg-red-50" : "text-gray-700 hover:bg-gray-100"}`}>
+              <span>{label}</span>
+              {shortcut && <kbd className="text-[10px] text-gray-400">{shortcut}</kbd>}
             </button>
-            <button type="button" onClick={ctxMenuPaste}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
-              ペースト
-            </button>
-            <div className="border-t border-gray-100 my-0.5" />
-            <button type="button" onClick={ctxMenuSelectAll}
-              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">
-              すべて選択
-            </button>
-          </div>
-        )}
+          );
+          const Divider = () => <div className="my-0.5 border-t border-gray-100" />;
+          return (
+            <div
+              className="fixed z-50 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              {hasSelection ? (
+                <>
+                  <MenuItem label="コピー" onClick={() => { ctxMenuCopy(); }} shortcut="⌘C" />
+                  <MenuItem label="ペースト（置換）" onClick={() => { ctxMenuPaste(); }} shortcut="⌘V" />
+                  <Divider />
+                  <MenuItem label="選択範囲を削除" danger onClick={() => {
+                    const text = getFieldText(cursor);
+                    const start = Math.min(selAnchor!.charIndex, cursor.charIndex);
+                    const end = Math.max(selAnchor!.charIndex, cursor.charIndex);
+                    const newText = text.slice(0, start) + text.slice(end);
+                    pushHistory();
+                    updateDoc((d) => {
+                      const nb = [...d.blocks];
+                      const b = { ...nb[cursor.blockIndex] } as any;
+                      if (b.type === "title") { if (cursor.field === "title") b.title = newText; else b.author = newText; }
+                      else if (b.type === "serif") { if (cursor.field === "speaker") b.speaker = newText; else b.speech = newText; }
+                      else b.text = newText;
+                      nb[cursor.blockIndex] = b;
+                      return { ...d, blocks: nb };
+                    });
+                    setCursor({ ...cursor, charIndex: start });
+                    setSelAnchor(null);
+                    close();
+                  }} />
+                  <MenuItem label="選択を解除" onClick={() => { setSelAnchor(null); close(); }} />
+                </>
+              ) : (
+                <>
+                  <MenuItem label="コピー（フィールド全体）" onClick={() => { ctxMenuCopy(); }} shortcut="⌘C" />
+                  <MenuItem label="ペースト" onClick={() => { ctxMenuPaste(); }} shortcut="⌘V" />
+                  <MenuItem label="すべて選択" onClick={() => { ctxMenuSelectAll(); }} shortcut="⌘A" />
+                  <Divider />
+                  <MenuItem label="下にセリフを追加" onClick={() => insertAfter({ type: "serif", speaker: "", speech: "" })} />
+                  <MenuItem label="下にト書きを追加" onClick={() => insertAfter({ type: "togaki", text: "" })} />
+                  <MenuItem label="下に場面を追加" onClick={() => insertAfter({ type: "sceneHeading", text: "" })} />
+                  <MenuItem label="下にタイトルを追加" onClick={() => insertAfter({ type: "title", title: "", author: "" })} />
+                  <MenuItem label="下に登場人物を追加" onClick={() => insertAfter({ type: "castList", characters: [] })} />
+                  <Divider />
+                  {curType && curType !== "title" && curType !== "castList" && (
+                    <>
+                      <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-400">種別変更</div>
+                      {curType !== "serif" && <MenuItem label="→ セリフ" onClick={() => changeTo("serif")} />}
+                      {curType !== "togaki" && <MenuItem label="→ ト書き" onClick={() => changeTo("togaki")} />}
+                      {curType !== "sceneHeading" && <MenuItem label="→ 場面" onClick={() => changeTo("sceneHeading")} />}
+                      {curType !== "endMark" && <MenuItem label="→ 終幕" onClick={() => changeTo("endMark")} />}
+                      <Divider />
+                    </>
+                  )}
+                  <MenuItem label="ブロックを上に移動" onClick={() => { moveBlock(cursor.blockIndex, "up"); close(); }} shortcut="⌘⇧↑" />
+                  <MenuItem label="ブロックを下に移動" onClick={() => { moveBlock(cursor.blockIndex, "down"); close(); }} shortcut="⌘⇧↓" />
+                  <Divider />
+                  <MenuItem label="このブロックを削除" danger onClick={() => { deleteBlock(cursor.blockIndex); close(); }} />
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {showPanel && (
           <BlockPanel
@@ -915,6 +1128,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
             onDeleteBlock={deleteBlock}
             onChangeBlockType={changeBlockType}
             onSelectBlock={selectBlock}
+            onInsertBlock={insertBlock}
+            onUpdateBlock={updateBlockAt}
           />
         )}
       </div>

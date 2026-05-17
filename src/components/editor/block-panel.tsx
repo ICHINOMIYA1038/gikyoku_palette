@@ -7,7 +7,7 @@ import {
   type Block,
   blockLabel,
 } from "@/lib/editor/play-document";
-import { ChevronUp, ChevronDown, Trash2, GripVertical } from "lucide-react";
+import { GripVertical, Plus, X } from "lucide-react";
 
 type Props = {
   doc: PlayDocument;
@@ -17,165 +17,170 @@ type Props = {
   onDeleteBlock: (index: number) => void;
   onChangeBlockType: (index: number, newType: Block["type"]) => void;
   onSelectBlock: (index: number) => void;
+  onInsertBlock: (block: Block) => void;
+  onUpdateBlock: (index: number, updater: (b: Block) => Block) => void;
 };
 
-const CONVERTIBLE_TYPES: Block["type"][] = ["serif", "togaki", "sceneHeading", "setting"];
+const INSERT_TYPES: { type: Block["type"]; label: string; build: () => Block }[] = [
+  { type: "title", label: "タイトル", build: () => ({ type: "title", title: "", author: "" }) },
+  { type: "castList", label: "登場人物", build: () => ({ type: "castList", characters: [] }) },
+  { type: "sceneHeading", label: "場面", build: () => ({ type: "sceneHeading", text: "" }) },
+  { type: "serif", label: "セリフ", build: () => ({ type: "serif", speaker: "", speech: "" }) },
+  { type: "togaki", label: "ト書き", build: () => ({ type: "togaki", text: "" }) },
+  { type: "endMark", label: "終幕", build: () => ({ type: "endMark", text: "おわり" }) },
+];
+
+function blockPreview(b: Block): string {
+  switch (b.type) {
+    case "title": return b.title || "(無題)";
+    case "castList": return b.characters.map((c) => c.name).join("、") || "(未入力)";
+    case "serif": return `${(b as any).speaker || "?"}: ${(b as any).speech?.slice(0, 20) || ""}`;
+    case "togaki": return (b as any).text?.slice(0, 24) || "(未入力)";
+    case "sceneHeading": return (b as any).text || "(未入力)";
+    case "endMark": return (b as any).text || "おわり";
+    default: return "";
+  }
+}
 
 export function BlockPanel({
   doc,
   cursor,
-  onMoveBlock,
   onReorderBlock,
-  onDeleteBlock,
-  onChangeBlockType,
   onSelectBlock,
+  onInsertBlock,
+  onUpdateBlock,
 }: Props) {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const block = doc.blocks[cursor.blockIndex];
-  if (!block) return null;
-
   const bi = cursor.blockIndex;
-  const canMoveUp = bi > 0;
-  const canMoveDown = bi < doc.blocks.length - 1;
-  const canDelete = doc.blocks.length > 1 && block.type !== "title";
-  const canConvert = CONVERTIBLE_TYPES.includes(block.type);
-
-  // ブロック内容のプレビュー
-  const preview = (() => {
-    switch (block.type) {
-      case "title":
-        return block.title || "(タイトル未入力)";
-      case "castList":
-        return block.characters.map((c) => c.name).join("、") || "(登場人物未入力)";
-      case "serif":
-        return `${block.speaker || "?"}: ${block.speech?.slice(0, 30) || "..."}`;
-      case "togaki":
-        return block.text?.slice(0, 40) || "(ト書き未入力)";
-      case "sceneHeading":
-        return block.text || "(場面未入力)";
-      case "setting":
-        return block.text || "(設定未入力)";
-      case "endMark":
-        return block.text || "おわり";
-      default:
-        return "";
-    }
-  })();
+  const currentBlock = doc.blocks[bi];
 
   return (
-    <div className="w-56 border-l border-gray-200 bg-white shrink-0 flex flex-col text-xs overflow-y-auto">
-      {/* ブロック情報 */}
-      <div className="p-3 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-medium text-gray-900">
-            {blockLabel(block.type)}
-          </span>
-          <span className="text-gray-400">#{bi + 1}</span>
-        </div>
-        <p className="text-gray-500 truncate">{preview}</p>
-      </div>
-
-      {/* 種別変更 */}
-      {canConvert && (
-        <div className="p-3 border-b border-gray-100">
-          <p className="text-gray-400 mb-1.5">ブロック種別</p>
-          <div className="flex flex-wrap gap-1">
-            {CONVERTIBLE_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onChangeBlockType(bi, t)}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
-                  block.type === t
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {blockLabel(t)}
-              </button>
+    <div className="flex w-60 shrink-0 flex-col border-l border-gray-200 bg-white text-xs">
+      {/* 登場人物編集（castListが選択中の時のみ） */}
+      {currentBlock?.type === "castList" && (
+        <div className="border-b border-gray-100 p-3">
+          <p className="mb-2 text-[10px] uppercase tracking-wider text-gray-400">登場人物</p>
+          <div className="space-y-1">
+            {currentBlock.characters.map((c, idx) => (
+              <div key={idx} className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={c.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    onUpdateBlock(bi, (b) => {
+                      if (b.type !== "castList") return b;
+                      const characters = b.characters.map((x, i) => i === idx ? { ...x, name } : x);
+                      return { ...b, characters };
+                    });
+                  }}
+                  className="flex-1 rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-blue-300 focus:outline-none"
+                  placeholder="人物名"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateBlock(bi, (b) => {
+                      if (b.type !== "castList") return b;
+                      return { ...b, characters: b.characters.filter((_, i) => i !== idx) };
+                    });
+                  }}
+                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  title="削除"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateBlock(bi, (b) => {
+                  if (b.type !== "castList") return b;
+                  return { ...b, characters: [...b.characters, { name: "", description: "" }] };
+                });
+              }}
+              className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-gray-300 px-2 py-1.5 text-[11px] text-gray-500 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" />
+              人物を追加
+            </button>
           </div>
         </div>
       )}
 
-      {/* 移動・削除 */}
-      <div className="p-3 border-b border-gray-100">
-        <p className="text-gray-400 mb-1.5">操作</p>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onMoveBlock(bi, "up")}
-            disabled={!canMoveUp}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="上に移動（Ctrl+↑）"
-          >
-            <ChevronUp className="h-3 w-3" /> 上へ
-          </button>
-          <button
-            type="button"
-            onClick={() => onMoveBlock(bi, "down")}
-            disabled={!canMoveDown}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="下に移動（Ctrl+↓）"
-          >
-            <ChevronDown className="h-3 w-3" /> 下へ
-          </button>
-          <div className="flex-1" />
-          {canDelete && (
+      {/* 挿入セクション */}
+      <div className="border-b border-gray-100 p-3">
+        <p className="mb-2 text-[10px] uppercase tracking-wider text-gray-400">挿入</p>
+        <div className="grid grid-cols-2 gap-1">
+          {INSERT_TYPES.map((t) => (
             <button
+              key={t.type}
               type="button"
-              onClick={() => onDeleteBlock(bi)}
-              className="flex items-center gap-1 px-2 py-1 rounded text-red-500 hover:bg-red-50"
-              title="ブロックを削除"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onInsertBlock(t.build())}
+              className="flex items-center gap-1 rounded bg-gray-50 px-2 py-1.5 text-[11px] text-gray-700 hover:bg-gray-100"
+              title={`現在のブロックの下に${t.label}を追加`}
             >
-              <Trash2 className="h-3 w-3" />
+              <Plus className="h-3 w-3 text-gray-400" />
+              {t.label}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
-      {/* ブロック一覧（ドラッグ&ドロップ対応） */}
-      <div className="p-3 flex-1 min-h-0">
-        <p className="text-gray-400 mb-1.5">ブロック一覧（ドラッグで並替）</p>
-        <div className="space-y-0.5 overflow-y-auto" style={{ maxHeight: "calc(100% - 20px)" }}>
-          {doc.blocks.map((b, i) => (
-            <div
-              key={i}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", String(i));
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDragOverIndex(i);
-              }}
-              onDragLeave={() => setDragOverIndex(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
-                if (!isNaN(from) && from !== i) onReorderBlock(from, i);
-                setDragOverIndex(null);
-              }}
-              onDragEnd={() => setDragOverIndex(null)}
-              onClick={() => onSelectBlock(i)}
-              className={`flex items-center gap-1 px-1 py-1 rounded text-[11px] cursor-grab active:cursor-grabbing transition-colors ${
-                dragOverIndex === i
-                  ? "bg-blue-100 border border-blue-300"
-                  : i === bi
-                    ? "bg-blue-50 text-blue-700 font-medium"
-                    : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              <GripVertical className="h-3 w-3 text-gray-300 shrink-0" />
-              <span className="truncate">
-                <span className="text-gray-400 mr-1">{i + 1}.</span>
-                {blockLabel(b.type)}
-                {b.type === "serif" && ` ${(b as any).speaker || ""}`}
-              </span>
-            </div>
-          ))}
+      {/* ブロック一覧（ナビゲーション） */}
+      <div className="flex min-h-0 flex-1 flex-col p-3">
+        <div className="mb-1.5 flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wider text-gray-400">ブロック一覧</p>
+          <span className="text-[10px] text-gray-400">{doc.blocks.length}</span>
+        </div>
+        <div className="flex-1 space-y-0.5 overflow-y-auto">
+          {doc.blocks.map((b, i) => {
+            const isActive = i === bi;
+            return (
+              <div
+                key={i}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", String(i));
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverIndex(i);
+                }}
+                onDragLeave={() => setDragOverIndex(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+                  if (!isNaN(from) && from !== i) onReorderBlock(from, i);
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => setDragOverIndex(null)}
+                onClick={() => onSelectBlock(i)}
+                className={`group flex cursor-grab items-start gap-1.5 rounded px-1.5 py-1.5 transition-colors active:cursor-grabbing ${
+                  dragOverIndex === i
+                    ? "border border-blue-300 bg-blue-100"
+                    : isActive
+                      ? "bg-blue-50"
+                      : "hover:bg-gray-50"
+                }`}
+              >
+                <GripVertical className="mt-0.5 h-3 w-3 shrink-0 text-gray-300 opacity-0 group-hover:opacity-100" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[10px] text-gray-400">{i + 1}</span>
+                    <span className={`text-[11px] ${isActive ? "font-medium text-blue-700" : "text-gray-700"}`}>
+                      {blockLabel(b.type)}
+                    </span>
+                  </div>
+                  <p className="truncate text-[11px] text-gray-500">{blockPreview(b)}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
