@@ -202,10 +202,12 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
   let lastBlockType: string | null = null;
   let isFirstColOfBlock = true;
 
+  const CONTENT_W_LIMIT = PAGE_W - M_LEFT - M_RIGHT;
   const advanceCol = (width: number = COL_W) => {
     px += width;
     colsOnPage++;
-    if (colsOnPage >= COLS_PER_PAGE) {
+    // ページ送りは横幅基準。コンテンツ幅を超えそうなら次ページへ
+    if (px >= CONTENT_W_LIMIT) {
       page++;
       colsOnPage = 0;
       px = 0;

@@ -244,9 +244,22 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     1 // 1倍以上にはしない
   );
 
+  // Enter後に表示するブロック種別選択ポップアップ
+  const [blockPicker, setBlockPicker] = useState<{ blockIndex: number } | null>(null);
+
+  // 登場人物名リスト（castListブロックから抽出）
+  const castNames = (() => {
+    for (const b of doc.blocks) {
+      if (b.type === "castList") return b.characters.map((c) => c.name).filter((n) => n.length > 0);
+    }
+    return [];
+  })();
+
   // IME composing text（Canvasに表示するため）
   const [composingText, setComposingText] = useState("");
   const isComposingRef = useRef(false);
+  // 話者ピッカーで数字選択した直後のcompositionEndをスキップ
+  const skipCompositionEndRef = useRef(false);
   const cursorRef = useRef(cursor);
   const docRef = useRef(doc);
   useEffect(() => { cursorRef.current = cursor; }, [cursor]);
@@ -350,6 +363,8 @@ export function CanvasEditor({ playId, initialContent }: Props) {
   // テキストを現在のカーソル位置に挿入（refベース、stale closure回避）
   const insertTextAtCursor = useCallback((text: string) => {
     if (!text) return;
+    // 文字入力したらピッカーを閉じる
+    setBlockPicker(null);
     const cur = cursorRef.current;
     const d = docRef.current;
     const block = d.blocks[cur.blockIndex];
@@ -451,6 +466,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       if (e.button === 2) return;
       e.preventDefault(); // Canvasへのフォーカスをブロック
       setContextMenu(null);
+      setBlockPicker(null);
       inputRef.current?.focus();
 
       const canvas = e.currentTarget as HTMLCanvasElement;
@@ -686,6 +702,36 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const block = doc.blocks[blockIndex];
       if (!block) return;
 
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setBlockPicker(null);
+        setSelAnchor(null);
+        return;
+      }
+
+      // 話者欄が空の時に数字キー(1-9)で登場人物を選択
+      if (
+        block.type === "serif" &&
+        field === "speaker" &&
+        (block.speaker || "").length === 0 &&
+        castNames.length > 0 &&
+        /^[1-9]$/.test(e.key)
+      ) {
+        const idx = Number(e.key) - 1;
+        if (idx < castNames.length) {
+          e.preventDefault();
+          pushHistory();
+          updateDoc((d) => {
+            const nb = [...d.blocks];
+            const b = { ...nb[blockIndex] } as any;
+            b.speaker = castNames[idx];
+            nb[blockIndex] = b;
+            return { ...d, blocks: nb };
+          });
+          setCursor({ blockIndex, field: "speech", charIndex: 0 });
+          return;
+        }
+      }
       // Shift+Enter: ブロック内改行
       if (e.key === "Enter" && e.shiftKey) {
         e.preventDefault();
@@ -745,8 +791,18 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           nb.splice(blockIndex + 1, 0, makeBlock(post));
           return { ...d, blocks: nb };
         });
-        const newField: CursorPosition["field"] = block.type === "serif" ? "speech" : "text";
+        // 新規セリフブロックは話者欄から始める（候補ピッカーが出る）
+        const newField: CursorPosition["field"] = block.type === "serif" ? "speaker" : "text";
         setCursor({ blockIndex: blockIndex + 1, field: newField, charIndex: 0 });
+        // 新規ブロック作成直後にピッカーを表示
+        setBlockPicker({ blockIndex: blockIndex + 1 });
+        return;
+      }
+
+      // Tab: セリフ ↔ ト書き を切替
+      if (e.key === "Tab" && (block.type === "serif" || block.type === "togaki")) {
+        e.preventDefault();
+        changeBlockType(blockIndex, block.type === "serif" ? "togaki" : "serif");
         return;
       }
 
@@ -970,14 +1026,43 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         }}
         onCompositionStart={() => { isComposingRef.current = true; }}
         onCompositionUpdate={(e) => {
-          // 未確定文字列をCanvasに表示するためstateに同期
-          setComposingText((e as any).data || "");
+          const data = (e as any).data || "";
+          // 話者ピッカー表示中で数字1-9が来たら話者選択（IME経由でも反応）
+          const cb = doc.blocks[cursor.blockIndex];
+          if (
+            cb?.type === "serif" &&
+            cursor.field === "speaker" &&
+            (cb.speaker || "").length === 0 &&
+            castNames.length > 0 &&
+            /^[1-9]$/.test(data)
+          ) {
+            const idx = Number(data) - 1;
+            if (idx < castNames.length) {
+              skipCompositionEndRef.current = true;
+              setComposingText("");
+              pushHistory();
+              updateDoc((d) => {
+                const nb = [...d.blocks];
+                const b = { ...nb[cursor.blockIndex] } as any;
+                b.speaker = castNames[idx];
+                nb[cursor.blockIndex] = b;
+                return { ...d, blocks: nb };
+              });
+              setCursor({ blockIndex: cursor.blockIndex, field: "speech", charIndex: 0 });
+              return;
+            }
+          }
+          setComposingText(data);
         }}
         onCompositionEnd={(e) => {
           isComposingRef.current = false;
-          const finalText = (e as any).data || "";
           setComposingText("");
           if (inputRef.current) inputRef.current.value = "";
+          if (skipCompositionEndRef.current) {
+            skipCompositionEndRef.current = false;
+            return;
+          }
+          const finalText = (e as any).data || "";
           if (finalText) insertTextAtCursor(finalText);
         }}
         onInput={(e) => {
@@ -1008,6 +1093,73 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         }}
         autoFocus
       />
+
+      {/* 話者ピッカー（話者欄が空の時、登場人物リストを数字キー対応で表示） */}
+      {inputPos &&
+        doc.blocks[cursor.blockIndex]?.type === "serif" &&
+        cursor.field === "speaker" &&
+        ((doc.blocks[cursor.blockIndex] as any).speaker || "").length === 0 &&
+        castNames.length > 0 && (
+          <div
+            className="fixed z-40 flex flex-col gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+            style={{ left: inputPos.left + 20, top: inputPos.top + 24, minWidth: 120 }}
+          >
+            <p className="px-2 pb-0.5 text-[10px] uppercase tracking-wider text-gray-400">話者を選択</p>
+            {castNames.map((name, idx) => (
+              <button
+                key={idx}
+                type="button"
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  pushHistory();
+                  updateDoc((d) => {
+                    const nb = [...d.blocks];
+                    const b = { ...nb[cursor.blockIndex] } as any;
+                    b.speaker = name;
+                    nb[cursor.blockIndex] = b;
+                    return { ...d, blocks: nb };
+                  });
+                  setCursor({ blockIndex: cursor.blockIndex, field: "speech", charIndex: 0 });
+                }}
+                className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+              >
+                <span>{name}</span>
+                {idx < 9 && <kbd className="text-[10px] text-gray-400">{idx + 1}</kbd>}
+              </button>
+            ))}
+          </div>
+        )}
+
+      {/* ブロック種別ピッカー（Enter直後にカーソル近くに表示） */}
+      {blockPicker && inputPos && (
+        <div
+          className="fixed z-40 flex gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+          style={{ left: inputPos.left + 20, top: inputPos.top - 8 }}
+        >
+          {([
+            { type: "serif", label: "セリフ" },
+            { type: "togaki", label: "ト書き" },
+          ] as { type: Block["type"]; label: string }[]).map((t) => (
+            <button
+              key={t.type}
+              type="button"
+              tabIndex={-1}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                changeBlockType(blockPicker.blockIndex, t.type);
+                setBlockPicker(null);
+              }}
+              className={`rounded px-2 py-1 text-xs hover:bg-gray-100 ${
+                doc.blocks[blockPicker.blockIndex]?.type === t.type ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+          <span className="ml-1 mr-1 self-center text-[10px] text-gray-400">Tab</span>
+        </div>
+      )}
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
