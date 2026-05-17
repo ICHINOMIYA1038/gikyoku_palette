@@ -316,7 +316,8 @@ export function drawScript(
   selection: SelectionRange = null,
   blockDrag: ScriptDragState = null,
   composingText: string = "",
-  cursorOut?: { rect: CursorRect | null }
+  cursorOut?: { rect: CursorRect | null },
+  printMode: boolean = false
 ) {
   if (cursorOut) cursorOut.rect = null;
   const _cur = cursorOut; // 内側でdrawCursorLineに渡せるよう別名
@@ -666,7 +667,7 @@ export function drawScript(
     }
 
     // ドラッグハンドル（各ブロックの最初の列、ヘッダー領域にドット）
-    if (isFirst && !col.special) {
+    if (isFirst && !col.special && !printMode) {
       ctx.fillStyle = "#ccc";
       const hx = col.x;
       const hy = M_TOP + HEADER_H + 4;

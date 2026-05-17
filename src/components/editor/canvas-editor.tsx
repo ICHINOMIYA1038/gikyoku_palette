@@ -30,6 +30,7 @@ import {
 } from "@/lib/editor/draw-script";
 import { drawHorizontal, hitTestHorizontal, findDropIndex, H_DRAG_HANDLE_W, type BlockDragState } from "@/lib/editor/draw-horizontal";
 import { savePlayBody } from "@/actions/plays";
+import { exportPdf } from "@/lib/editor/export-pdf";
 import { CURSOR_PEN, CURSOR_GRAB, CURSOR_GRABBING } from "./cursors";
 
 export type EditorMode = "horizontal" | "script";
@@ -318,13 +319,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const out = cursorOutRef.current;
-      out.rect = null;
       canvas.width = containerSize.w;
       canvas.height = containerSize.h;
       colsRef.current = [];
       drawHorizontal(ctx, doc, cursor, containerSize.w, containerSize.h, sel, blockDrag, composingText, out);
       const rect = canvas.getBoundingClientRect();
-      const cr = out.rect;
+      const cr: CursorRect | null = out.rect;
       if (cr) {
         const sx = rect.width / canvas.width;
         const sy = rect.height / canvas.height;
@@ -393,7 +393,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
       switch (block.type) {
         case "title": return cur.field === "title" ? block.title : cur.field === "author" ? block.author : "";
         case "serif": return cur.field === "speaker" ? block.speaker : cur.field === "direction" ? (block.direction || "") : block.speech;
-        case "castList": return "";
         default: return (block as any).text || "";
       }
     })();
@@ -999,6 +998,9 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
         <div className="mx-1 h-4 w-px bg-gray-200" />
         <ToolBtn label="元に戻す" shortcut="⌘Z" onClick={undo} />
+
+        <div className="mx-1 h-4 w-px bg-gray-200" />
+        <ToolBtn label="PDF出力" onClick={() => exportPdf(doc)} />
 
         <div className="mx-1 h-4 w-px bg-gray-200" />
         <ToolBtn label={showPanel ? "パネル非表示" : "パネル"} onClick={() => setShowPanel((v) => !v)} />
