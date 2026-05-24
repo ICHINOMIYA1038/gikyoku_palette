@@ -9,20 +9,23 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import React from "react";
+import path from "node:path";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 
-// 日本語フォント (通常/太字)
+// 日本語フォント (通常/太字)。public/fonts に同梱したファイルを読み込む。
+// 以前は jsDelivr 経由でリクエスト毎に取得していたが、Vercel Lambda で
+// 30s タイムアウトに引っかかるケースがあったためローカル同梱に変更。
 Font.register({
   family: "NotoSansJP",
   fonts: [
     {
-      src: "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.1/files/noto-sans-jp-japanese-400-normal.woff",
+      src: path.join(process.cwd(), "public/fonts/noto-sans-jp/regular.woff"),
       fontWeight: "normal",
     },
     {
-      src: "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.1/files/noto-sans-jp-japanese-700-normal.woff",
+      src: path.join(process.cwd(), "public/fonts/noto-sans-jp/bold.woff"),
       fontWeight: "bold",
     },
   ],
