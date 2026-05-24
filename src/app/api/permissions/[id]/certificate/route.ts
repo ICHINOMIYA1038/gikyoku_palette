@@ -16,20 +16,20 @@ import { prisma } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 
 // 日本語フォント (通常/太字)。public/fonts に同梱したファイルを
-// モジュールロード時に Buffer として読み込み、Font.register に直接渡す。
+// モジュールロード時に Data URL に変換して Font.register に渡す。
 // jsDelivr 経由だと毎回フェッチで Vercel Lambda がタイムアウトしていた。
+// @react-pdf/renderer の `src` は URL / 絶対パス / Data URL を受け付け、
+// Buffer は受け付けないため Data URL 化が必須。
 const FONT_DIR = path.join(process.cwd(), "public/fonts/noto-sans-jp");
+function loadFontDataUrl(filename: string): string {
+  const buf = fs.readFileSync(path.join(FONT_DIR, filename));
+  return `data:font/woff;base64,${buf.toString("base64")}`;
+}
 Font.register({
   family: "NotoSansJP",
   fonts: [
-    {
-      src: fs.readFileSync(path.join(FONT_DIR, "regular.woff")) as unknown as string,
-      fontWeight: "normal",
-    },
-    {
-      src: fs.readFileSync(path.join(FONT_DIR, "bold.woff")) as unknown as string,
-      fontWeight: "bold",
-    },
+    { src: loadFontDataUrl("regular.woff"), fontWeight: "normal" },
+    { src: loadFontDataUrl("bold.woff"), fontWeight: "bold" },
   ],
 });
 
