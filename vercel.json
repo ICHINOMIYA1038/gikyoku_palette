@@ -5,7 +5,7 @@
       "maxDuration": 30
     },
     "src/app/api/permissions/[id]/certificate/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "src/app/api/upload-pdf/route.ts": {
       "maxDuration": 30

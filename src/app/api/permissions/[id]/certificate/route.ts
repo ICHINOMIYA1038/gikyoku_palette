@@ -9,27 +9,32 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import React from "react";
+import fs from "node:fs";
 import path from "node:path";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 
-// 日本語フォント (通常/太字)。public/fonts に同梱したファイルを読み込む。
-// 以前は jsDelivr 経由でリクエスト毎に取得していたが、Vercel Lambda で
-// 30s タイムアウトに引っかかるケースがあったためローカル同梱に変更。
+// 日本語フォント (通常/太字)。public/fonts に同梱したファイルを
+// モジュールロード時に Buffer として読み込み、Font.register に直接渡す。
+// jsDelivr 経由だと毎回フェッチで Vercel Lambda がタイムアウトしていた。
+const FONT_DIR = path.join(process.cwd(), "public/fonts/noto-sans-jp");
 Font.register({
   family: "NotoSansJP",
   fonts: [
     {
-      src: path.join(process.cwd(), "public/fonts/noto-sans-jp/regular.woff"),
+      src: fs.readFileSync(path.join(FONT_DIR, "regular.woff")) as unknown as string,
       fontWeight: "normal",
     },
     {
-      src: path.join(process.cwd(), "public/fonts/noto-sans-jp/bold.woff"),
+      src: fs.readFileSync(path.join(FONT_DIR, "bold.woff")) as unknown as string,
       fontWeight: "bold",
     },
   ],
 });
+
+// Lambda タイムアウトを長めに（フォント embed + PDF render）。
+export const maxDuration = 60;
 
 const styles = StyleSheet.create({
   // ---- ページ ----
