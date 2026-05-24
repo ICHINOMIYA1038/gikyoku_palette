@@ -451,9 +451,9 @@ export async function GET(
   } catch (error) {
     console.error("Certificate PDF generation error:", error);
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    const stack = error instanceof Error ? error.stack?.split("\n").slice(0, 8).join("\n") : null;
+    const stack = error instanceof Error ? error.stack?.split("\n").slice(0, 12).join("\n") : null;
     return NextResponse.json(
-      { error: "許可証PDFの生成に失敗しました。", detail, stack },
+      { error: "許可証PDFの生成に失敗しました。", detail, stack, build: "v4-dataurl" },
       { status: 500 }
     );
   }
