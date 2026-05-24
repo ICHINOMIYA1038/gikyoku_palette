@@ -1,13 +1,12 @@
 export type PermissionStatus =
   | "pending"
   | "approved"
+  | "paid"
   | "permitted"
   | "rejected"
   | "expired"
   | "revision_requested"
   | "withdrawn";
-
-export type PaymentStatus = "pending" | "completed" | "failed" | "refunded";
 
 export type NotificationType =
   | "new_application"
@@ -24,7 +23,8 @@ export type TicketType = "paid" | "free";
 
 export const PERMISSION_STATUS_LABELS: Record<PermissionStatus, string> = {
   pending: "審査中",
-  approved: "決済待ち",
+  approved: "振込待ち",
+  paid: "入金確認待ち",
   permitted: "許可済み",
   rejected: "却下",
   expired: "期限切れ",
@@ -44,7 +44,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   new_play_published: "新作公開",
 };
 
-export const PLATFORM_FEE_RATE = 0.05;
+export const PLATFORM_FEE_RATE = 0;
 
 /**
  * スレッド内の system message の種別。metadata.kind に入る。

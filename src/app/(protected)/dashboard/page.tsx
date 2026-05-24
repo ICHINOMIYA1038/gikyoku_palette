@@ -6,8 +6,6 @@ import {
   Banknote,
   Plus,
   ShieldCheck,
-  AlertTriangle,
-  ArrowRight,
   Heart,
   UserPlus,
   Activity as ActivityIcon,
@@ -108,26 +106,6 @@ export default async function DashboardPage() {
       <h1 className="mb-8 text-2xl font-serif font-bold text-gray-900">
         ダッシュボード
       </h1>
-
-      {/* Stripe 警告 */}
-      {summary.paidPublishedCount > 0 && !summary.stripeReady && (
-        <Link
-          href="/dashboard/stripe"
-          className="mb-6 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 transition-colors hover:bg-amber-100"
-        >
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-amber-900">
-              Stripe 連携が必要です
-            </p>
-            <p className="mt-0.5 text-xs text-amber-800">
-              有料作品が {summary.paidPublishedCount} 件公開中ですが、Stripe Connect が
-              未連携のため申請者からの決済を受け取れません。
-            </p>
-          </div>
-          <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-amber-600" />
-        </Link>
-      )}
 
       {/* 統計カード */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

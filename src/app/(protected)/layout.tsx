@@ -5,11 +5,9 @@ import {
   LayoutDashboard,
   BookOpen,
   Library,
-  ShieldCheck,
   Banknote,
   Bell,
   User,
-  Link2,
   MessageCircle,
   Heart,
   UserPlus,
@@ -77,9 +75,6 @@ export default function ProtectedLayout({
             <NavLink href="/dashboard/sales" icon={Banknote}>
               売上
             </NavLink>
-            <NavLink href="/dashboard/stripe" icon={Link2}>
-              Stripe連携
-            </NavLink>
 
             <SectionLabel>上演依頼管理</SectionLabel>
             <NavLink href="/dashboard/permissions" icon={Inbox}>
@@ -107,7 +102,6 @@ export default function ProtectedLayout({
                   <NavLink href="/dashboard/plays" icon={BookOpen}>作品</NavLink>
                   <NavLink href="/dashboard/series" icon={Library}>シリーズ</NavLink>
                   <NavLink href="/dashboard/sales" icon={Banknote}>売上</NavLink>
-                  <NavLink href="/dashboard/stripe" icon={Link2}>Stripe</NavLink>
                 </div>
               </div>
               <div>

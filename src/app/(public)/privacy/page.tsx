@@ -78,16 +78,6 @@ export default function PrivacyPage() {
             </div>
 
             <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold mb-1">Stripe（決済処理）</h3>
-              <p className="text-sm">
-                上演許可に伴う決済処理に利用します。クレジットカード情報はStripeが直接管理し、本サービスのサーバーには保存されません。
-              </p>
-              <a href="https://stripe.com/jp/privacy" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
-                Stripe プライバシーポリシー
-              </a>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-semibold mb-1">Supabase（データベース・認証基盤）</h3>
               <p className="text-sm">
                 ユーザーデータおよびコンテンツの保存・管理に利用します。

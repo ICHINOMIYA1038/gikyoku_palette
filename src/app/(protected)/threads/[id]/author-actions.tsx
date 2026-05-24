@@ -30,17 +30,20 @@ export function AuthorActions({ permission, onActed }: Props) {
   const [mode, setMode] = useState<Mode>("idle");
   const [message, setMessage] = useState("");
   const [reason, setReason] = useState("");
+  const [payoutBankInfo, setPayoutBankInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canRevise = permission.status === "pending";
   const canAct = ["pending", "revision_requested"].includes(permission.status);
+  const isPaid = permission.feeAmount > 0;
   if (!canAct) return null;
 
   const reset = () => {
     setMode("idle");
     setMessage("");
     setReason("");
+    setPayoutBankInfo("");
     setError(null);
   };
 
@@ -52,7 +55,15 @@ export function AuthorActions({ permission, onActed }: Props) {
       | { success: true }
       | { error: string };
     if (mode === "approve") {
-      res = await approvePermission(permission.id, message || undefined);
+      if (isPaid && !payoutBankInfo.trim()) {
+        setError("有料案件では振込先情報の入力が必須です");
+        setSubmitting(false);
+        return;
+      }
+      res = await approvePermission(permission.id, {
+        message: message || undefined,
+        payoutBankInfo: isPaid ? payoutBankInfo : undefined,
+      });
     } else if (mode === "reject") {
       if (!reason.trim()) {
         setError("却下理由を入力してください");
@@ -150,6 +161,25 @@ export function AuthorActions({ permission, onActed }: Props) {
             rows={3}
             required
           />
+        </div>
+      )}
+
+      {mode === "approve" && isPaid && (
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">
+            振込先情報 *
+          </label>
+          <Textarea
+            value={payoutBankInfo}
+            onChange={(e) => setPayoutBankInfo(e.target.value)}
+            placeholder={`例:\n○○銀行 △△支店\n普通 1234567\nメイギ タロウ`}
+            rows={5}
+            required
+          />
+          <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+            申請者に表示されます。戯曲パレットは決済に関与しないため、
+            申請者は表示された口座へ直接振込を行います。
+          </p>
         </div>
       )}
 

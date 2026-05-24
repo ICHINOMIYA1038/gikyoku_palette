@@ -30,11 +30,11 @@ model PalettePlay {
   readingDirection String   @default("ltr") @map("reading_direction")
   seriesId        String?   @map("series_id")
   seriesOrder     Int?      @map("series_order")
-  durationMinutes Int       @map("duration_minutes")
-  castTotal       Int       @map("cast_total")
-  castMale        Int       @default(0) @map("cast_male")
-  castFemale      Int       @default(0) @map("cast_female")
-  castOther       Int       @default(0) @map("cast_other")
+  durationMinutes Int?      @map("duration_minutes")
+  castTotal       Int?      @map("cast_total")
+  castMale        Int?      @map("cast_male")
+  castFemale      Int?      @map("cast_female")
+  castOther       Int?      @map("cast_other")
   feeAmount       Int       @default(0) @map("fee_amount")
   isFree          Boolean   @default(true) @map("is_free")
   isPublished     Boolean   @default(false) @map("is_published")
@@ -146,7 +146,10 @@ model PalettePermission {
   expectedAudience   Int       @map("expected_audience")
   ticketType         String    @map("ticket_type")
   numPerformances    Int       @default(1) @map("num_performances")
-  // status: pending | approved | permitted | rejected | revision_requested | withdrawn | expired
+  // status: pending | approved | paid | permitted | rejected | revision_requested | withdrawn | expired
+  //   approved = 作家承認済み・申請者の振込待ち
+  //   paid     = 申請者が振込報告済み・作家の入金確認待ち
+  //   permitted = 作家が入金確認・許可証発行済み
   status             String    @default("pending")
   rejectionReason    String?   @map("rejection_reason")
   revisionReason     String?   @map("revision_reason")
@@ -154,6 +157,13 @@ model PalettePermission {
   withdrawnReason    String?   @map("withdrawn_reason")
   feeAmount          Int       @map("fee_amount")
   platformFee        Int       @default(0) @map("platform_fee")
+  /// 作家が承認時に提示する振込先（銀行名・支店・口座種別・口座番号・名義など自由記述）。
+  /// プラットフォームは決済に関与しないため、当事者間で直接振込する。
+  payoutBankInfo     String?   @map("payout_bank_info")
+  /// 申請者が「振込しました」と報告した時刻
+  transferReportedAt DateTime? @map("transfer_reported_at")
+  /// 作家が「入金を確認しました」と確定した時刻（=許可証発行時刻）
+  transferConfirmedAt DateTime? @map("transfer_confirmed_at")
   permissionNumber   String?   @unique @map("permission_number")
   createdAt          DateTime  @default(now()) @map("created_at")
   reviewedAt         DateTime? @map("reviewed_at")
@@ -161,7 +171,6 @@ model PalettePermission {
   expiresAt          DateTime? @map("expires_at")
 
   play        PalettePlay         @relation(fields: [playId], references: [id])
-  payment     PalettePayment?
   thread      PaletteThread?
   attachments PaletteAttachment[]
 
@@ -269,37 +278,6 @@ model PaletteAttachment {
   @@index([permissionId], map: "idx_palette_attachment_permission")
   @@index([messageId], map: "idx_palette_attachment_message")
   @@map("palette_attachments")
-  @@schema("palette")
-}
-
-model PalettePayment {
-  id                       String    @id @default(cuid())
-  permissionId             String    @unique @map("permission_id")
-  stripeCheckoutSessionId  String?   @map("stripe_checkout_session_id")
-  stripePaymentIntentId    String?   @map("stripe_payment_intent_id")
-  amount                   Int
-  platformFee              Int       @map("platform_fee")
-  authorAmount             Int       @map("author_amount")
-  currency                 String    @default("jpy")
-  status                   String    @default("pending")
-  createdAt                DateTime  @default(now()) @map("created_at")
-  completedAt              DateTime? @map("completed_at")
-
-  permission PalettePermission @relation(fields: [permissionId], references: [id])
-
-  @@map("palette_payments")
-  @@schema("palette")
-}
-
-model PaletteStripeAccount {
-  id                   String   @id @default(cuid())
-  userId               String   @unique @map("user_id")
-  stripeAccountId      String   @map("stripe_account_id")
-  onboardingCompleted  Boolean  @default(false) @map("onboarding_completed")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at")
-
-  @@map("palette_stripe_accounts")
   @@schema("palette")
 }
 

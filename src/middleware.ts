@@ -12,11 +12,10 @@ const securityHeaders: Record<string, string> = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Content-Security-Policy":
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: blob: https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com https://lh3.googleusercontent.com; " +
-    "frame-src https://js.stripe.com; " +
-    "connect-src 'self' https://api.stripe.com https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com; " +
+    "connect-src 'self' https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com; " +
     "font-src 'self' https://fonts.gstatic.com;",
 };
 

@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { ThreadDetail } from "@/types/thread";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { PaymentButton } from "./payment-button";
+import { TransferPanel } from "./transfer-panel";
 
 /**
  * スレッド右ペインの企画情報パネル。
@@ -27,8 +27,9 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
   // inquiry スレッドでは表示する情報がないので呼び出し側で抑止する
   if (!permission) return null;
   const isApplicant = role === "applicant";
-  const showPaymentCta =
-    isApplicant && permission.status === "approved";
+  const showTransferPanel =
+    permission.feeAmount > 0 &&
+    (permission.status === "approved" || permission.status === "paid");
   const showPermissionNumber = !!permission.permissionNumber;
 
   // 作家視点のときは申請者情報を、申請者視点のときは作家情報を最上部に出す
@@ -124,16 +125,19 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
         </div>
       )}
 
-      {showPaymentCta && (
+      {showTransferPanel && (
         <div className="border-b border-gray-100 bg-amber-50/50 p-4">
           <p className="mb-2 text-[11px] uppercase tracking-wider text-amber-700">
-            お支払い
+            {isApplicant ? "お振込み" : "入金確認"}
           </p>
-          <PaymentButton
+          <TransferPanel
             permissionId={permission.id}
             feeAmount={permission.feeAmount}
             expiresAt={permission.expiresAt}
-            authorStripeReady={detail.authorStripeReady ?? false}
+            payoutBankInfo={permission.payoutBankInfo}
+            status={permission.status as "approved" | "paid"}
+            role={isApplicant ? "applicant" : "author"}
+            transferReportedAt={permission.transferReportedAt}
           />
         </div>
       )}
@@ -183,8 +187,7 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
                 {formatCurrency(permission.feeAmount)}
               </p>
               <p className="mt-0.5 text-xs text-gray-500">
-                手数料 {formatCurrency(permission.platformFee)} / 執筆者受取{" "}
-                {formatCurrency(permission.feeAmount - permission.platformFee)}
+                当事者間で直接お振込みください
               </p>
             </>
           )}

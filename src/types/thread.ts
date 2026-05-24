@@ -83,6 +83,12 @@ export type PermissionInThread = {
   withdrawnReason: string | null;
   paidAt: string | null;
   expiresAt: string | null;
+  /** 作家が承認時に提示した振込先（自由記述） */
+  payoutBankInfo: string | null;
+  /** 申請者が振込報告した時刻 */
+  transferReportedAt: string | null;
+  /** 作家が入金確認した時刻 */
+  transferConfirmedAt: string | null;
   /** 申請日時 */
   createdAt: string;
   /** 申請者(ユーザー) */
@@ -102,8 +108,6 @@ export type ThreadDetail = {
   play: ThreadPlaySummary | null;
   /** permission スレッドのみ */
   permission: PermissionInThread | null;
-  /** permission スレッドのみ。有料作品の決済導線判断に使用 */
-  authorStripeReady: boolean | null;
   attachments: AttachmentSummary[];
   messages: ThreadMessage[];
 };

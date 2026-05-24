@@ -9,6 +9,7 @@ import type { PermissionStatus } from "@/types";
 const STATUS_STYLES: Record<PermissionStatus, string> = {
   pending: "bg-sky-50 text-sky-700 ring-sky-200",
   approved: "bg-amber-50 text-amber-700 ring-amber-200",
+  paid: "bg-blue-50 text-blue-700 ring-blue-200",
   permitted: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   rejected: "bg-rose-50 text-rose-700 ring-rose-200",
   expired: "bg-zinc-100 text-zinc-500 ring-zinc-200",

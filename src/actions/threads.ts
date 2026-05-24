@@ -198,10 +198,6 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
 
   if (thread.kind === "permission" && thread.permission) {
     const isAuthor = thread.permission.play.authorId === userId;
-    const stripeAccount = await prisma.paletteStripeAccount.findUnique({
-      where: { userId: thread.permission.play.authorId },
-      select: { onboardingCompleted: true },
-    });
 
     // 申請者と作家の情報をまとめて取得
     const applicantId = thread.permission.applicantId;
@@ -231,6 +227,9 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
       withdrawnReason: thread.permission.withdrawnReason,
       paidAt: thread.permission.paidAt?.toISOString() ?? null,
       expiresAt: thread.permission.expiresAt?.toISOString() ?? null,
+      payoutBankInfo: thread.permission.payoutBankInfo,
+      transferReportedAt: thread.permission.transferReportedAt?.toISOString() ?? null,
+      transferConfirmedAt: thread.permission.transferConfirmedAt?.toISOString() ?? null,
       createdAt: thread.permission.createdAt.toISOString(),
       applicant: applicantUser,
       author: authorUser,
@@ -246,7 +245,6 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
         coverImageUrl: thread.permission.play.coverImageUrl,
       },
       permission,
-      authorStripeReady: !!stripeAccount?.onboardingCompleted,
       attachments: thread.permission.attachments.map(toAttachmentSummary),
       messages,
     };
@@ -260,7 +258,6 @@ export async function getThreadDetail(threadId: string): Promise<ThreadDetail | 
     other,
     play: null,
     permission: null,
-    authorStripeReady: null,
     attachments: [],
     messages,
   };

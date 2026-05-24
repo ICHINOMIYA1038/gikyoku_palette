@@ -1,110 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { permissionFormSchema } from "@/lib/validations/permission";
 import { calculatePlatformFee, generatePermissionNumber } from "@/lib/utils";
 import { createNotification } from "@/actions/notifications";
 import { extractFormValues } from "@/lib/form-values";
-import type { Prisma } from "@prisma/client";
-import type { SystemMessageKind } from "@/types";
-
-// User情報をraw queryで取得するヘルパー
-async function getUserById(id: string) {
-  const users = await prisma.$queryRaw<
-    Array<{ id: string; name: string | null; displayName: string | null; avatarUrl: string | null; email: string | null }>
-  >`
-    SELECT id, name, "displayName", "avatarUrl", email FROM "public"."User" WHERE id = ${id}
-  `;
-  return users[0] || null;
-}
-
-async function getUsersByIds(ids: string[]) {
-  if (ids.length === 0) return new Map();
-  const users = await prisma.$queryRaw<
-    Array<{ id: string; name: string | null; displayName: string | null; avatarUrl: string | null }>
-  >`
-    SELECT id, name, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${ids})
-  `;
-  return new Map(users.map((u) => [u.id, u]));
-}
-
-/**
- * スレッドにシステムメッセージを追加し、thread.lastMessage/lastAt を更新する。
- * 呼び出し側のトランザクションに参加する形で使う。
- */
-async function appendSystemMessage(
-  tx: Prisma.TransactionClient,
-  params: {
-    threadId: string;
-    kind: SystemMessageKind;
-    content: string;
-    metadata?: Record<string, unknown>;
-    createdAt?: Date;
-  }
-) {
-  const createdAt = params.createdAt ?? new Date();
-  await tx.paletteMessage.create({
-    data: {
-      threadId: params.threadId,
-      senderId: null,
-      type: "system",
-      content: params.content,
-      metadata: { kind: params.kind, ...(params.metadata ?? {}) },
-      createdAt,
-    },
-  });
-  await tx.paletteThread.update({
-    where: { id: params.threadId },
-    data: { lastMessage: params.content, lastAt: createdAt },
-  });
-}
-
-/**
- * スレッドにユーザーメッセージを追加し、thread.lastMessage/lastAt を更新する。
- */
-async function appendUserMessage(
-  tx: Prisma.TransactionClient,
-  params: {
-    threadId: string;
-    senderId: string;
-    content: string;
-    createdAt?: Date;
-  }
-) {
-  const createdAt = params.createdAt ?? new Date();
-  const trimmed = params.content.trim();
-  if (!trimmed) return;
-  await tx.paletteMessage.create({
-    data: {
-      threadId: params.threadId,
-      senderId: params.senderId,
-      type: "text",
-      content: trimmed,
-      createdAt,
-    },
-  });
-  await tx.paletteThread.update({
-    where: { id: params.threadId },
-    data: {
-      lastMessage: trimmed.length > 100 ? trimmed.slice(0, 100) : trimmed,
-      lastAt: createdAt,
-    },
-  });
-}
+import { getPublicUserWithEmail, getPublicUsersByIds, unknownUser } from "@/lib/users";
+import { appendSystemMessage, appendUserMessage } from "@/lib/thread-messages";
+import { requireUserId } from "@/lib/auth-helpers";
 
 // ============================================
 // 公開クエリ
 // ============================================
 
 export async function getMyApplications() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   return prisma.palettePermission.findMany({
-    where: { applicantId: session.user.id },
+    where: { applicantId: userId },
     include: {
       play: { select: { id: true, title: true, isFree: true, feeAmount: true } },
       thread: { select: { id: true } },
@@ -114,11 +28,10 @@ export async function getMyApplications() {
 }
 
 export async function getReceivedApplications(status?: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   const where: Record<string, unknown> = {
-    play: { authorId: session.user.id },
+    play: { authorId: userId },
   };
   if (status) where.status = status;
 
@@ -132,11 +45,11 @@ export async function getReceivedApplications(status?: string) {
   });
 
   const applicantIds = [...new Set(permissions.map((p) => p.applicantId))];
-  const applicantMap = await getUsersByIds(applicantIds);
+  const applicantMap = await getPublicUsersByIds(applicantIds);
 
   return permissions.map((p) => ({
     ...p,
-    applicant: applicantMap.get(p.applicantId) || { id: p.applicantId, displayName: "不明" },
+    applicant: applicantMap.get(p.applicantId) ?? unknownUser(p.applicantId),
   }));
 }
 
@@ -145,9 +58,7 @@ export async function getReceivedApplications(status?: string) {
 // ============================================
 
 export async function createPermission(playId: string, formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId: string = session.user.id;
+  const userId = await requireUserId();
 
   const play = await prisma.palettePlay.findUnique({ where: { id: playId } });
   if (!play || !play.isPublished) {
@@ -158,7 +69,7 @@ export async function createPermission(playId: string, formData: FormData) {
   const active = await prisma.palettePermission.findFirst({
     where: {
       playId,
-      applicantId: session.user.id,
+      applicantId: userId,
       status: { in: ["pending", "approved", "revision_requested"] },
     },
   });
@@ -268,10 +179,18 @@ export async function createPermission(playId: string, formData: FormData) {
 // アクション: 承認
 // ============================================
 
-export async function approvePermission(permissionId: string, message?: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId: string = session.user.id;
+/**
+ * 作家による申請承認。
+ * - 無料案件: 即 permitted、許可証番号発行
+ * - 有料案件: approved 状態。payoutBankInfo（振込先）を必ず指定する。
+ *   申請者は表示された振込先に直接振込→振込報告→作家確認→許可証発行 の順に進む。
+ *   プラットフォームは決済に関与しない（資金移動業の規制回避）。
+ */
+export async function approvePermission(
+  permissionId: string,
+  opts: { message?: string; payoutBankInfo?: string } = {}
+) {
+  const userId = await requireUserId();
 
   const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
@@ -284,11 +203,15 @@ export async function approvePermission(permissionId: string, message?: string) 
     return { error: "この申請は承認できる状態ではありません" };
   }
   if (!permission.thread) {
-    // 正常系なら必ずスレッドがあるが、念のため
     return { error: "スレッドが見つかりません" };
   }
 
   const isFree = permission.feeAmount === 0;
+  const trimmedPayout = opts.payoutBankInfo?.trim() || null;
+  if (!isFree && !trimmedPayout) {
+    return { error: "有料案件では振込先情報の入力が必須です" };
+  }
+
   const newStatus = isFree ? "permitted" : "approved";
   const permissionNumber = isFree ? generatePermissionNumber() : null;
   const now = new Date();
@@ -300,6 +223,8 @@ export async function approvePermission(permissionId: string, message?: string) 
         status: newStatus,
         reviewedAt: now,
         permissionNumber,
+        payoutBankInfo: trimmedPayout,
+        transferConfirmedAt: isFree ? now : null,
         expiresAt: isFree ? null : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       },
     });
@@ -307,7 +232,127 @@ export async function approvePermission(permissionId: string, message?: string) 
     await appendSystemMessage(tx, {
       threadId: permission.thread!.id,
       kind: "permission_approved",
-      content: isFree ? "上演が許可されました" : "申請が承認されました",
+      content: isFree ? "上演が許可されました" : "申請が承認されました。振込先が提示されました。",
+      metadata: { permissionNumber, feeAmount: permission.feeAmount },
+      createdAt: now,
+    });
+
+    if (opts.message?.trim()) {
+      await appendUserMessage(tx, {
+        threadId: permission.thread!.id,
+        senderId: userId,
+        content: opts.message,
+        createdAt: new Date(now.getTime() + 1),
+      });
+    }
+  });
+
+  await createNotification({
+    userId: permission.applicantId,
+    type: "approved",
+    permissionId,
+    title: isFree ? "上演が許可されました" : "上演許可が承認されました",
+    message: isFree
+      ? `「${permission.play.title}」の上演が許可されました。許可証をダウンロードできます。`
+      : `「${permission.play.title}」の上演許可が承認されました。提示された振込先へ上演料をお振込みください（30日以内）。`,
+  });
+
+  revalidatePath("/dashboard/permissions");
+  revalidatePath("/threads");
+  revalidatePath(`/threads/${permission.thread.id}`);
+  return { success: true };
+}
+
+/**
+ * 申請者が「振込しました」と報告する。status: approved → paid
+ */
+export async function reportTransfer(permissionId: string) {
+  const userId = await requireUserId();
+
+  const permission = await prisma.palettePermission.findUnique({
+    where: { id: permissionId },
+    include: { play: { select: { title: true, authorId: true } }, thread: { select: { id: true } } },
+  });
+  if (!permission || permission.applicantId !== userId) {
+    return { error: "権限がありません" };
+  }
+  if (permission.status !== "approved") {
+    return { error: "この申請は振込報告できる状態ではありません" };
+  }
+  if (!permission.thread) {
+    return { error: "スレッドが見つかりません" };
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.palettePermission.update({
+      where: { id: permissionId },
+      data: { status: "paid", transferReportedAt: now, paidAt: now },
+    });
+
+    await appendSystemMessage(tx, {
+      threadId: permission.thread!.id,
+      kind: "payment_completed",
+      content: "申請者が振込完了を報告しました",
+      metadata: { feeAmount: permission.feeAmount },
+      createdAt: now,
+    });
+  });
+
+  await createNotification({
+    userId: permission.play.authorId,
+    type: "payment_completed",
+    permissionId,
+    title: "振込完了の報告がありました",
+    message: `「${permission.play.title}」の上演料について、申請者から振込完了の報告がありました。入金をご確認のうえ、許可証を発行してください。`,
+  });
+
+  revalidatePath("/dashboard/permissions");
+  revalidatePath("/threads");
+  revalidatePath(`/threads/${permission.thread.id}`);
+  return { success: true };
+}
+
+/**
+ * 作家が入金を確認し、許可証を発行する。status: paid → permitted
+ * approved 状態から直接 permitted へ進めることも許可（オフライン合意ケース）。
+ */
+export async function confirmTransfer(permissionId: string, message?: string) {
+  const userId = await requireUserId();
+
+  const permission = await prisma.palettePermission.findUnique({
+    where: { id: permissionId },
+    include: { play: true, thread: { select: { id: true } } },
+  });
+  if (!permission || permission.play.authorId !== userId) {
+    return { error: "権限がありません" };
+  }
+  if (!["paid", "approved"].includes(permission.status)) {
+    return { error: "この申請は許可証発行できる状態ではありません" };
+  }
+  if (!permission.thread) {
+    return { error: "スレッドが見つかりません" };
+  }
+
+  const now = new Date();
+  const permissionNumber = generatePermissionNumber();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.palettePermission.update({
+      where: { id: permissionId },
+      data: {
+        status: "permitted",
+        permissionNumber,
+        transferConfirmedAt: now,
+        paidAt: permission.paidAt ?? now,
+      },
+    });
+
+    await appendSystemMessage(tx, {
+      threadId: permission.thread!.id,
+      kind: "payment_completed",
+      content: "入金が確認され、許可証が発行されました",
       metadata: { permissionNumber, feeAmount: permission.feeAmount },
       createdAt: now,
     });
@@ -324,12 +369,10 @@ export async function approvePermission(permissionId: string, message?: string) 
 
   await createNotification({
     userId: permission.applicantId,
-    type: "approved",
+    type: "payment_completed",
     permissionId,
-    title: isFree ? "上演が許可されました" : "上演許可が承認されました",
-    message: isFree
-      ? `「${permission.play.title}」の上演が許可されました。許可証をダウンロードできます。`
-      : `「${permission.play.title}」の上演許可が承認されました。上演料の決済を行ってください（30日以内）。`,
+    title: "上演が許可されました",
+    message: `「${permission.play.title}」の入金が確認され、正式に上演が許可されました。許可証をダウンロードできます。`,
   });
 
   revalidatePath("/dashboard/permissions");
@@ -343,9 +386,7 @@ export async function approvePermission(permissionId: string, message?: string) 
 // ============================================
 
 export async function rejectPermission(permissionId: string, reason: string, message?: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId: string = session.user.id;
+  const userId = await requireUserId();
 
   const trimmedReason = reason.trim();
   if (!trimmedReason) return { error: "却下理由を入力してください" };
@@ -415,9 +456,7 @@ export async function requestRevision(
   reason: string,
   message?: string
 ) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId: string = session.user.id;
+  const userId = await requireUserId();
 
   const trimmedReason = reason.trim();
   if (!trimmedReason) return { error: "修正依頼の理由を入力してください" };
@@ -485,9 +524,7 @@ export async function resubmitPermission(
   permissionId: string,
   formData: FormData
 ) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId: string = session.user.id;
+  const userId = await requireUserId();
 
   const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
@@ -587,9 +624,7 @@ export async function resubmitPermission(
 // ============================================
 
 export async function withdrawPermission(permissionId: string, reason?: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const userId: string = session.user.id;
+  const userId = await requireUserId();
 
   const permission = await prisma.palettePermission.findUnique({
     where: { id: permissionId },
@@ -646,29 +681,28 @@ export async function withdrawPermission(permissionId: string, reason?: string) 
 // ============================================
 
 export async function getPermissionById(id: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   const permission = await prisma.palettePermission.findUnique({
     where: { id },
-    include: { play: true, payment: true, thread: { select: { id: true } } },
+    include: { play: true, thread: { select: { id: true } } },
   });
   if (!permission) return null;
 
-  if (permission.applicantId !== session.user.id && permission.play.authorId !== session.user.id) {
+  if (permission.applicantId !== userId && permission.play.authorId !== userId) {
     return null;
   }
 
   const [author, applicant] = await Promise.all([
-    getUserById(permission.play.authorId),
-    getUserById(permission.applicantId),
+    getPublicUserWithEmail(permission.play.authorId),
+    getPublicUserWithEmail(permission.applicantId),
   ]);
 
   return {
     ...permission,
     play: { ...permission.play, author },
     applicant,
-    currentUserId: session.user.id,
+    currentUserId: userId,
   };
 }
 

@@ -65,8 +65,6 @@ export async function getDashboardSummary() {
     totalViews,
     pendingApplications,
     monthlyRevenue,
-    paidPublishedCount,
-    stripeAccount,
   ] = await Promise.all([
     prisma.palettePlay.count({
       where: { authorId: userId, isPublished: true },
@@ -78,26 +76,14 @@ export async function getDashboardSummary() {
     prisma.palettePermission.count({
       where: { play: { authorId: userId }, status: "pending" },
     }),
-    prisma.palettePayment.aggregate({
+    // 当事者間振込モデルのため、確定許可済み案件の上演料を月次集計（自己申告ベース）
+    prisma.palettePermission.aggregate({
       where: {
-        permission: { play: { authorId: userId } },
-        status: "completed",
-        completedAt: { gte: startOfMonth },
+        play: { authorId: userId },
+        status: "permitted",
+        transferConfirmedAt: { gte: startOfMonth },
       },
-      _sum: { authorAmount: true },
-    }),
-    // 有料 (isFree=false かつ feeAmount>0) で公開中の作品数
-    prisma.palettePlay.count({
-      where: {
-        authorId: userId,
-        isPublished: true,
-        isFree: false,
-        feeAmount: { gt: 0 },
-      },
-    }),
-    prisma.paletteStripeAccount.findUnique({
-      where: { userId },
-      select: { onboardingCompleted: true },
+      _sum: { feeAmount: true },
     }),
   ]);
 
@@ -105,11 +91,7 @@ export async function getDashboardSummary() {
     publishedPlays,
     totalViews: totalViews._sum.viewCount || 0,
     pendingApplications,
-    monthlyRevenue: monthlyRevenue._sum.authorAmount || 0,
-    /** 有料公開中作品数。stripe 未設定で >0 なら警告対象。 */
-    paidPublishedCount,
-    /** 作家自身の Stripe Connect 連携完了状態 */
-    stripeReady: !!stripeAccount?.onboardingCompleted,
+    monthlyRevenue: monthlyRevenue._sum.feeAmount || 0,
   };
 }
 
@@ -154,15 +136,14 @@ export async function getDashboardAnalytics() {
         AND p.created_at >= ${thirtyDaysAgo}
       GROUP BY 1 ORDER BY 1
     `,
-    // 直近6ヶ月の月別売上（執筆者受取額）
+    // 直近6ヶ月の月別売上（許可確定額ベース）
     prisma.$queryRaw<Array<{ m: Date; c: bigint }>>`
-      SELECT date_trunc('month', pay.completed_at) AS m, SUM(pay.author_amount) AS c
-      FROM palette.palette_payments pay
-      JOIN palette.palette_permissions p ON p.id = pay.permission_id
+      SELECT date_trunc('month', p.transfer_confirmed_at) AS m, SUM(p.fee_amount) AS c
+      FROM palette.palette_permissions p
       JOIN palette.palette_plays pl ON pl.id = p.play_id
       WHERE pl.author_id = ${userId}
-        AND pay.status = 'completed'
-        AND pay.completed_at >= ${sixMonthsAgo}
+        AND p.status = 'permitted'
+        AND p.transfer_confirmed_at >= ${sixMonthsAgo}
       GROUP BY 1 ORDER BY 1
     `,
     // 閲覧数 TOP 5 の自分の公開作品
@@ -270,45 +251,46 @@ export async function getDashboardAnalytics() {
   };
 }
 
+/**
+ * 売上一覧。当事者間振込モデルでは、許可確定（transferConfirmedAt）した案件を売上として集計。
+ * プラットフォームは決済に関与しないため、実額は作家自身の自己申告ベース。
+ */
 export async function getSalesSummary() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const payments = await prisma.palettePayment.findMany({
+  const permissions = await prisma.palettePermission.findMany({
     where: {
-      permission: { play: { authorId: session.user.id } },
-      status: "completed",
+      play: { authorId: session.user.id },
+      status: "permitted",
     },
     include: {
-      permission: {
-        include: {
-          play: { select: { title: true } },
-        },
-      },
+      play: { select: { title: true } },
     },
-    orderBy: { completedAt: "desc" },
+    orderBy: { transferConfirmedAt: "desc" },
   });
 
-  // Fetch applicant display names via raw query
-  const applicantIds = [...new Set(payments.map((p) => p.permission.applicantId))];
+  const applicantIds = [...new Set(permissions.map((p) => p.applicantId))];
   let applicantMap = new Map<string, string>();
   if (applicantIds.length > 0) {
-    const applicants = await prisma.$queryRaw<any[]>`
+    const applicants = await prisma.$queryRaw<Array<{ id: string; displayName: string | null }>>`
       SELECT id, "displayName" FROM "public"."User" WHERE id = ANY(${applicantIds})
     `;
-    applicantMap = new Map(applicants.map((a: any) => [a.id, a.displayName || "不明"]));
+    applicantMap = new Map(applicants.map((a) => [a.id, a.displayName ?? "不明"]));
   }
 
-  const paymentsWithApplicant = payments.map((p) => ({
-    ...p,
-    permission: {
-      ...p.permission,
-      applicantDisplayName: applicantMap.get(p.permission.applicantId) || "不明",
-    },
+  const items = permissions.map((p) => ({
+    id: p.id,
+    permissionNumber: p.permissionNumber,
+    feeAmount: p.feeAmount,
+    transferConfirmedAt: p.transferConfirmedAt,
+    playTitle: p.play.title,
+    organizationName: p.organizationName,
+    performanceTitle: p.performanceTitle,
+    applicantDisplayName: applicantMap.get(p.applicantId) || "不明",
   }));
 
-  const totalRevenue = payments.reduce((sum, p) => sum + p.authorAmount, 0);
-  const totalFees = payments.reduce((sum, p) => sum + p.platformFee, 0);
+  const totalRevenue = permissions.reduce((sum, p) => sum + p.feeAmount, 0);
 
-  return { payments: paymentsWithApplicant, totalRevenue, totalFees };
+  return { items, totalRevenue };
 }
