@@ -10,6 +10,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { GenreSelector } from "@/components/plays/genre-selector";
 import { CoverImageUpload } from "@/components/plays/cover-image-upload";
 import { BodyTypeSelector } from "@/components/plays/body-type-selector";
+import { TagInput } from "@/components/plays/tag-input";
 import type { PalettePlay, PaletteGenre } from "@prisma/client";
 import { firstString, type FormValues } from "@/lib/form-values";
 
@@ -33,10 +34,12 @@ export function PlayEditForm({
   play,
   genres,
   seriesList,
+  initialTagNames,
 }: {
   play: PlayWithGenres;
   genres: PaletteGenre[];
   seriesList: SeriesOption[];
+  initialTagNames: string[];
 }) {
   const [coverImageUrl, setCoverImageUrl] = useState(play.coverImageUrl || "");
 
@@ -81,8 +84,8 @@ export function PlayEditForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="synopsis">あらすじ</Label>
-            <Textarea id="synopsis" name="synopsis" defaultValue={sv("synopsis", play.synopsis)} rows={4} required />
+            <Label htmlFor="synopsis">あらすじ（任意）</Label>
+            <Textarea id="synopsis" name="synopsis" defaultValue={sv("synopsis", play.synopsis)} rows={4} />
           </div>
 
           <div className="space-y-2">
@@ -140,6 +143,14 @@ export function PlayEditForm({
               genres={genres}
               selectedIds={play.genres.map(g => g.genre.id)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>タグ</Label>
+            <p className="text-xs text-gray-500">
+              自由記述のキーワードで作品を特徴付けられます。読者・劇団はタグで横断的に作品を探せます。
+            </p>
+            <TagInput defaultValue={initialTagNames} />
           </div>
 
           {seriesList.length > 0 && (

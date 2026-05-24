@@ -149,6 +149,8 @@ export async function updatePlay(playId: string, formData: FormData) {
   if (!parsed.success) return zodFailure(parsed.error, formData);
 
   const genreIds = formData.getAll("genreIds").map(Number) as number[];
+  const tagNames = formData.getAll("tagNames").map(String);
+  const hasTagInput = formData.has("tagNames");
 
   const { coverImageUrl: coverUrl, bodyPdfUrl, seriesId, seriesOrder, ...restData } = parsed.data;
 
@@ -178,6 +180,12 @@ export async function updatePlay(playId: string, formData: FormData) {
       });
     }
   });
+
+  // タグ更新（フォームに tagNames が含まれている場合のみ）
+  if (hasTagInput) {
+    const { setPlayTags } = await import("@/actions/tags");
+    await setPlayTags(playId, tagNames);
+  }
 
   revalidatePath(`/plays/${playId}`);
   revalidatePath("/dashboard/plays");

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db";
 import { listSeriesByAuthor } from "@/actions/series";
 import { getTagsForPlay } from "@/actions/tags";
 import { PlayEditForm } from "./play-edit-form";
-import { TagsEditor } from "@/components/plays/tags-editor";
 
 export const metadata = { title: "作品編集" };
 
@@ -31,8 +30,12 @@ export default async function PlayEditPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">作品編集</h1>
-      <PlayEditForm play={play} genres={genres} seriesList={seriesList} />
-      <TagsEditor playId={play.id} initialTags={tags} />
+      <PlayEditForm
+        play={play}
+        genres={genres}
+        seriesList={seriesList}
+        initialTagNames={tags.map((t) => t.name)}
+      />
     </div>
   );
 }
