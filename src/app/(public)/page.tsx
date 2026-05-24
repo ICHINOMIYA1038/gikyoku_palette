@@ -16,6 +16,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { NewsFeed } from "@/components/home/news-feed";
 import { HomePopular } from "@/components/home/home-popular";
 import { HomeSidebar } from "@/components/home/home-sidebar";
+import { Landing } from "@/components/home/landing";
 
 export default async function HomePage({
   searchParams,
@@ -32,6 +33,14 @@ export default async function HomePage({
   const params = await searchParams;
   const session = await auth();
   const loggedIn = !!session?.user?.id;
+
+  // 未ログインかつ検索条件無しならランディングページ
+  const hasFilters = !!(params.q || params.genre || params.duration || params.cast);
+  if (!loggedIn && !hasFilters) {
+    const stats = await getStats();
+    return <Landing stats={stats} />;
+  }
+
   let userName: string | null = null;
   if (session?.user?.id) {
     const rows = await prisma.$queryRaw<Array<{ displayName: string | null; name: string | null }>>`
