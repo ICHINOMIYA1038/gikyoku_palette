@@ -438,7 +438,9 @@ export async function GET(
     return new Response(Buffer.from(pdfBuffer) as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="permission-${permission.permissionNumber}.pdf"`,
+        // `<a download>` でファイル名が "certificate.txt" にならないよう
+        // attachment で明示する。
+        "Content-Disposition": `attachment; filename="permission-${permission.permissionNumber}.pdf"`,
       },
     });
   } catch (error) {
