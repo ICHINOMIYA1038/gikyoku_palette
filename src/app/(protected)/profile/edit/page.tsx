@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ProfileEditForm } from "./profile-edit-form";
+import { PayoutTemplatesEditor } from "./payout-templates-editor";
+import { listPayoutTemplates } from "@/actions/payout-templates";
 
 export const metadata = {
   title: "プロフィール編集",
@@ -33,20 +35,34 @@ export default async function ProfileEditPage({
   const profile = users[0];
   if (!profile) redirect("/login");
 
-  const params = await searchParams;
+  const [params, payoutTemplates] = await Promise.all([
+    searchParams,
+    listPayoutTemplates(),
+  ]);
   const isFirstLogin = params.first === "true";
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-8">
-      <h1 className="mb-2 text-2xl font-bold">
-        {isFirstLogin ? "プロフィールを設定してください" : "プロフィール編集"}
-      </h1>
-      {isFirstLogin && (
-        <p className="mb-6 text-muted-foreground">
-          表示名はサイト上で公開されます。ペンネームを設定できます。
+    <div className="container mx-auto max-w-2xl px-4 py-8 space-y-10">
+      <div>
+        <h1 className="mb-2 text-2xl font-bold">
+          {isFirstLogin ? "プロフィールを設定してください" : "プロフィール編集"}
+        </h1>
+        {isFirstLogin && (
+          <p className="mb-6 text-muted-foreground">
+            表示名はサイト上で公開されます。ペンネームを設定できます。
+          </p>
+        )}
+        <ProfileEditForm profile={profile} />
+      </div>
+
+      <section id="payout-templates" className="scroll-mt-24">
+        <h2 className="mb-1 text-lg font-semibold">振込先テンプレート</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          上演許可を承認するときに振込先として呼び出せるプリセットです。
+          デフォルトを1つ設定すると、承認画面で自動選択されます。
         </p>
-      )}
-      <ProfileEditForm profile={profile} />
+        <PayoutTemplatesEditor initial={payoutTemplates} />
+      </section>
     </div>
   );
 }

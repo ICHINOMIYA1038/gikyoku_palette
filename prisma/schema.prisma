@@ -296,6 +296,22 @@ model PaletteNotification {
   @@schema("palette")
 }
 
+/// 作家が振込先情報をプリセットとして保存しておくテンプレート。
+/// 上演許可承認時に呼び出して payoutBankInfo に流し込む。
+model PalettePayoutTemplate {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  label     String
+  content   String
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_palette_payout_template_user")
+  @@map("palette_payout_templates")
+  @@schema("palette")
+}
+
 model PaletteReview {
   id        String   @id @default(cuid())
   playId    String   @map("play_id")

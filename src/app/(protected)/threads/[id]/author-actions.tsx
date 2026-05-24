@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, X, AlertCircle } from "lucide-react";
+import Link from "next/link";
 import {
   approvePermission,
   rejectPermission,
@@ -9,6 +10,7 @@ import {
 } from "@/actions/permissions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { listPayoutTemplates, type PayoutTemplate } from "@/actions/payout-templates";
 import type { PermissionInThread } from "@/types/thread";
 
 type Props = {
@@ -31,12 +33,34 @@ export function AuthorActions({ permission, onActed }: Props) {
   const [message, setMessage] = useState("");
   const [reason, setReason] = useState("");
   const [payoutBankInfo, setPayoutBankInfo] = useState("");
+  const [templates, setTemplates] = useState<PayoutTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canRevise = permission.status === "pending";
   const canAct = ["pending", "revision_requested"].includes(permission.status);
   const isPaid = permission.feeAmount > 0;
+
+  // approve モードに入ったときだけテンプレートを取りに行く
+  useEffect(() => {
+    if (mode !== "approve" || !isPaid) return;
+    let cancelled = false;
+    (async () => {
+      const list = await listPayoutTemplates();
+      if (cancelled) return;
+      setTemplates(list);
+      const def = list.find((t) => t.isDefault) ?? list[0];
+      if (def) {
+        setSelectedTemplateId(def.id);
+        setPayoutBankInfo(def.content);
+      } else {
+        setSelectedTemplateId("manual");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, isPaid]);
+
   if (!canAct) return null;
 
   const reset = () => {
@@ -44,7 +68,18 @@ export function AuthorActions({ permission, onActed }: Props) {
     setMessage("");
     setReason("");
     setPayoutBankInfo("");
+    setSelectedTemplateId("");
     setError(null);
+  };
+
+  const onSelectTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    if (id === "manual") {
+      setPayoutBankInfo("");
+    } else {
+      const t = templates.find((x) => x.id === id);
+      if (t) setPayoutBankInfo(t.content);
+    }
   };
 
   const handle = async () => {
@@ -165,21 +200,68 @@ export function AuthorActions({ permission, onActed }: Props) {
       )}
 
       {mode === "approve" && isPaid && (
-        <div>
-          <label className="mb-1 block text-xs text-gray-500">
-            振込先情報 *
-          </label>
-          <Textarea
-            value={payoutBankInfo}
-            onChange={(e) => setPayoutBankInfo(e.target.value)}
-            placeholder={`例:\n○○銀行 △△支店\n普通 1234567\nメイギ タロウ`}
-            rows={5}
-            required
-          />
-          <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
-            申請者に表示されます。戯曲パレットは決済に関与しないため、
-            申請者は表示された口座へ直接振込を行います。
-          </p>
+        <div className="space-y-2">
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">
+              振込先テンプレート
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onSelectTemplate(t.id)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                    selectedTemplateId === t.id
+                      ? "border-pink-400 bg-pink-50 text-pink-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  {t.label}
+                  {t.isDefault && <span className="ml-1 text-[9px] text-pink-500">★</span>}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => onSelectTemplate("manual")}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                  selectedTemplateId === "manual"
+                    ? "border-pink-400 bg-pink-50 text-pink-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                }`}
+              >
+                別途指定
+              </button>
+            </div>
+            {templates.length === 0 && (
+              <p className="mt-1 text-[11px] text-gray-500">
+                テンプレート未登録。
+                <Link href="/profile/edit#payout-templates" className="ml-1 text-pink-600 hover:underline" target="_blank">
+                  プロフィール編集で追加
+                </Link>
+                すると次回から呼び出せます。
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">
+              振込先情報 *
+            </label>
+            <Textarea
+              value={payoutBankInfo}
+              onChange={(e) => {
+                setPayoutBankInfo(e.target.value);
+                setSelectedTemplateId("manual");
+              }}
+              placeholder={`例:\n○○銀行 △△支店\n普通 1234567\nメイギ タロウ`}
+              rows={5}
+              required
+            />
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+              申請者に表示されます。戯曲パレットは決済に関与しないため、
+              申請者は表示された口座へ直接振込を行います。
+            </p>
+          </div>
         </div>
       )}
 
