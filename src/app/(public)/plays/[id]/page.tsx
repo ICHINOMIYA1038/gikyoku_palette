@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { getPlayById, incrementViewCount } from "@/actions/plays";
 import { getBookmarkState } from "@/actions/bookmarks";
@@ -7,7 +8,6 @@ import { BookmarkButton } from "@/components/plays/bookmark-button";
 import { ReviewSection } from "@/components/reviews/review-section";
 import { truncateText } from "@/lib/utils";
 import { formatCast, formatDuration } from "@/lib/format";
-import Link from "next/link";
 import Image from "next/image";
 import { Clock, Users, Banknote, Eye, Download, Star } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -167,11 +167,12 @@ export default async function PlayDetailPage({ params }: Props) {
                   />
                 </div>
                 <DownloadButton playId={play.id} title={play.title} hasBody={!!play.body || !!play.bodyPdfUrl} bodyType={play.bodyType || "text"} bodyPdfUrl={play.bodyPdfUrl} />
-                <div
-                  className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-gray-300 text-sm font-medium text-gray-500 cursor-not-allowed"
+                <Link
+                  href={`/permissions/new/${play.id}`}
+                  className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-pink-500 text-sm font-medium text-white transition-colors hover:bg-pink-600"
                 >
-                  上演許可を申請する（準備中）
-                </div>
+                  上演許可を申請する
+                </Link>
               </div>
 
               {/* Metadata */}

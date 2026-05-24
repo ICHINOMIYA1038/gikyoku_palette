@@ -1,14 +1,15 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 
 type PermissionCtaProps = {
-  /** 将来的に申請ボタンの導線に使うため受け取るが、現状は disabled で未使用 */
-  playId?: string;
+  playId: string;
   isFree: boolean;
   feeAmount: number;
 };
 
 export function PermissionCta({
+  playId,
   isFree,
   feeAmount,
 }: PermissionCtaProps) {
@@ -18,9 +19,7 @@ export function PermissionCta({
       <p className="mb-4 text-sm text-muted-foreground">
         上演料：{isFree ? "無料" : formatCurrency(feeAmount)}
       </p>
-      <Button size="lg" disabled>
-        上演許可を申請する（準備中）
-      </Button>
+      <Button size="lg" render={<Link href={`/permissions/new/${playId}`}>上演許可を申請する</Link>} />
     </div>
   );
 }
