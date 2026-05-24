@@ -6,6 +6,7 @@ import { DownloadButton } from "@/components/plays/download-button";
 import { BookmarkButton } from "@/components/plays/bookmark-button";
 import { ReviewSection } from "@/components/reviews/review-section";
 import { truncateText } from "@/lib/utils";
+import { formatCast, formatDuration } from "@/lib/format";
 import Link from "next/link";
 import Image from "next/image";
 import { Clock, Users, Banknote, Eye, Download, Star } from "lucide-react";
@@ -176,8 +177,8 @@ export default async function PlayDetailPage({ params }: Props) {
               {/* Metadata */}
               <div className="rounded-lg border border-gray-200 p-5 space-y-4">
                 <h3 className="text-sm font-medium text-gray-900">作品情報</h3>
-                <MetaRow icon={Clock} label="上演時間" value={`${play.durationMinutes}分`} />
-                <MetaRow icon={Users} label="出演人数" value={`${play.castTotal}人`} />
+                <MetaRow icon={Clock} label="上演時間" value={formatDuration(play.durationMinutes)} />
+                <MetaRow icon={Users} label="出演人数" value={formatCast(play.castTotal)} />
                 <MetaRow
                   icon={Banknote}
                   label="上演料"

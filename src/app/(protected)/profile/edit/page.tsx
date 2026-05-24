@@ -15,7 +15,17 @@ export default async function ProfileEditPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const users = await prisma.$queryRaw<any[]>`
+  type ProfileRow = {
+    id: string;
+    name: string | null;
+    email: string | null;
+    displayName: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    groupName: string | null;
+    image: string | null;
+  };
+  const users = await prisma.$queryRaw<ProfileRow[]>`
     SELECT id, name, email, "displayName", bio, "avatarUrl", "groupName", image
     FROM "public"."User" WHERE id = ${session.user.id}
   `;

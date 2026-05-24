@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const author = await getAuthorProfile(id);
   if (!author) return { title: "執筆者が見つかりません" };
-  return { title: `${author.displayName}の作品` };
+  return { title: `${(author.displayName ?? "不明")}の作品` };
 }
 
 export default async function AuthorProfilePage({ params }: Props) {
@@ -35,14 +35,14 @@ export default async function AuthorProfilePage({ params }: Props) {
           <Avatar className="h-16 w-16">
             <AvatarImage
               src={author.avatarUrl || undefined}
-              alt={author.displayName}
+              alt={(author.displayName ?? "不明")}
             />
             <AvatarFallback className="text-xl">
-              {author.displayName.slice(0, 1)}
+              {(author.displayName ?? "不明").slice(0, 1)}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-2xl font-bold">{author.displayName}</h1>
+            <h1 className="text-2xl font-bold">{(author.displayName ?? "不明")}</h1>
             {author.bio && (
               <p className="mt-1 text-muted-foreground">{author.bio}</p>
             )}
@@ -71,17 +71,17 @@ export default async function AuthorProfilePage({ params }: Props) {
 
       {author.plays.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {author.plays.map((play: any) => (
+          {author.plays.map((play) => (
             <PlayCard
               key={play.id}
               id={play.id}
               title={play.title}
-              authorName={author.displayName}
+              authorName={(author.displayName ?? "不明")}
               authorId={author.id}
               synopsis={play.synopsis}
               durationMinutes={play.durationMinutes}
               castTotal={play.castTotal}
-              genres={play.genres.map((pg: any) => ({ name: pg.genre.name }))}
+              genres={play.genres.map((pg) => ({ name: pg.genre.name }))}
               isFree={play.isFree}
               feeAmount={play.feeAmount}
               viewCount={play.viewCount}

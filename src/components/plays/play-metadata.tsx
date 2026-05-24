@@ -1,12 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { formatCast, formatDuration } from "@/lib/format";
+import { UNDETERMINED_LABEL } from "@/lib/constants";
 
 type PlayMetadataProps = {
-  durationMinutes: number;
-  castTotal: number;
-  castMale: number;
-  castFemale: number;
-  castOther: number;
+  durationMinutes: number | null;
+  castTotal: number | null;
+  castMale: number | null;
+  castFemale: number | null;
+  castOther: number | null;
   genres: string[];
   isFree: boolean;
   feeAmount: number;
@@ -25,9 +27,9 @@ export function PlayMetadata({
   viewCount,
 }: PlayMetadataProps) {
   const castBreakdown = [
-    castMale > 0 && `男${castMale}`,
-    castFemale > 0 && `女${castFemale}`,
-    castOther > 0 && `不問${castOther}`,
+    castMale && castMale > 0 && `男${castMale}`,
+    castFemale && castFemale > 0 && `女${castFemale}`,
+    castOther && castOther > 0 && `不問${castOther}`,
   ]
     .filter(Boolean)
     .join("/");
@@ -39,7 +41,7 @@ export function PlayMetadata({
           <span className="text-lg">⏱</span>
           <div>
             <p className="text-xs text-muted-foreground">上演時間</p>
-            <p className="font-medium">約{durationMinutes}分</p>
+            <p className="font-medium">{durationMinutes != null ? `約${formatDuration(durationMinutes)}` : UNDETERMINED_LABEL}</p>
           </div>
         </div>
         <div className="flex items-start gap-2">
@@ -47,7 +49,7 @@ export function PlayMetadata({
           <div>
             <p className="text-xs text-muted-foreground">出演人数</p>
             <p className="font-medium">
-              {castTotal}人{castBreakdown && `（${castBreakdown}）`}
+              {formatCast(castTotal)}{castBreakdown && `（${castBreakdown}）`}
             </p>
           </div>
         </div>

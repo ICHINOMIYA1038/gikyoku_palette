@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import { toggleBookmark } from "@/actions/bookmarks";
 
@@ -9,8 +8,6 @@ type Props = {
   playId: string;
   initialBookmarked: boolean;
   initialCount: number;
-  /** 未ログイン時のリダイレクト先（既定: 同じページに戻す） */
-  loginRedirectTo?: string;
 };
 
 /**
@@ -21,9 +18,7 @@ export function BookmarkButton({
   playId,
   initialBookmarked,
   initialCount,
-  loginRedirectTo,
 }: Props) {
-  const router = useRouter();
   const [bookmarked, setBookmarked] = useState(initialBookmarked);
   const [count, setCount] = useState(initialCount);
   const [pending, startTransition] = useTransition();

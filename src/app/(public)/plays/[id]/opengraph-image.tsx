@@ -97,8 +97,8 @@ export default async function Image({ params }: Props) {
             color: "#6b7280",
           }}
         >
-          <span>⏱ {play.durationMinutes}分</span>
-          <span>👥 {play.castTotal}人</span>
+          <span>⏱ {play.durationMinutes != null ? `${play.durationMinutes}分` : "未定"}</span>
+          <span>👥 {play.castTotal != null ? `${play.castTotal}人` : "未定"}</span>
           <span>
             💴 {play.isFree ? "無料" : `¥${play.feeAmount.toLocaleString()}`}
           </span>

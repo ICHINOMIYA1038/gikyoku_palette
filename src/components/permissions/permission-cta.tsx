@@ -2,13 +2,13 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 
 type PermissionCtaProps = {
-  playId: string;
+  /** 将来的に申請ボタンの導線に使うため受け取るが、現状は disabled で未使用 */
+  playId?: string;
   isFree: boolean;
   feeAmount: number;
 };
 
 export function PermissionCta({
-  playId,
   isFree,
   feeAmount,
 }: PermissionCtaProps) {

@@ -15,13 +15,20 @@ export async function getAuthors({
 }: GetAuthorsParams = {}) {
   const offset = (page - 1) * perPage;
 
-  let authors: any[];
+  type AuthorRow = {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    bio: string | null;
+    play_count: number;
+  };
+  let authors: AuthorRow[];
 
   // Dynamic ORDER BY cannot be parameterized in Prisma's tagged template,
   // so we use separate queries for each sort option.
   switch (sort) {
     case "newest":
-      authors = await prisma.$queryRaw<any[]>`
+      authors = await prisma.$queryRaw<AuthorRow[]>`
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
         FROM "public"."User" u
@@ -32,7 +39,7 @@ export async function getAuthors({
       `;
       break;
     case "alphabetical":
-      authors = await prisma.$queryRaw<any[]>`
+      authors = await prisma.$queryRaw<AuthorRow[]>`
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
         FROM "public"."User" u
@@ -44,7 +51,7 @@ export async function getAuthors({
       break;
     case "plays":
     default:
-      authors = await prisma.$queryRaw<any[]>`
+      authors = await prisma.$queryRaw<AuthorRow[]>`
         SELECT u.id, u."displayName", u."avatarUrl", u.bio,
                COUNT(p.id)::int as play_count
         FROM "public"."User" u
@@ -56,13 +63,13 @@ export async function getAuthors({
       break;
   }
 
-  const countResult = await prisma.$queryRaw<any[]>`
+  const countResult = await prisma.$queryRaw<Array<{ total: number }>>`
     SELECT COUNT(DISTINCT p.author_id)::int as total
     FROM palette.palette_plays p
     WHERE p.is_published = true
   `;
 
-  const total = countResult[0]?.total || 0;
+  const total = countResult[0]?.total ?? 0;
 
   return {
     authors,

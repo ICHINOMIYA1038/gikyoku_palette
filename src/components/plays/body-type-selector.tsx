@@ -1,7 +1,11 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
+import { PenLine } from "lucide-react";
+import { Banner } from "@/components/ui/banner";
+import { detectPdfMeta } from "@/lib/pdf-meta";
 
-type BodyType = "text" | "pdf";
+type BodyType = "text" | "pdf" | "editor";
 type Orientation = "portrait" | "landscape";
 type ReadingDirection = "ltr" | "rtl";
 
@@ -11,53 +15,9 @@ type Props = {
   initialPdfUrl?: string | null;
   initialOrientation?: Orientation;
   initialReadingDirection?: ReadingDirection;
+  playId?: string;
+  locked?: boolean;
 };
-
-/**
- * PDF の1ページ目から向きと読み進める方向を推定する。
- * 縦書きは文字アイテムの transform 行列で回転が入っている（t[0]≈0 & |t[1]|≫0）
- * ので、そのパターンが過半数ならば rtl と判定する。
- */
-async function detectPdfMeta(
-  file: File
-): Promise<{ orientation: Orientation; readingDirection: ReadingDirection }> {
-  try {
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 1 });
-    const orientation: Orientation =
-      viewport.width > viewport.height ? "landscape" : "portrait";
-
-    // 文字単位の回転を集計
-    let vertical = 0;
-    let horizontal = 0;
-    try {
-      const content = await page.getTextContent();
-      for (const it of content.items) {
-        if (!("transform" in it)) continue;
-        const t = (it as { transform: number[] }).transform;
-        // horizontal: t[0] と t[3] が主、t[1]/t[2] はほぼ 0
-        // vertical (90° 回転): t[1] or t[2] が主、t[0]/t[3] はほぼ 0
-        const horizScale = Math.abs(t[0]);
-        const vertSkew = Math.abs(t[1]) + Math.abs(t[2]);
-        if (vertSkew > horizScale) vertical++;
-        else horizontal++;
-      }
-    } catch {
-      // textContent 取得失敗はスキャンPDFの可能性。判定不能として ltr
-    }
-
-    const readingDirection: ReadingDirection =
-      vertical > horizontal ? "rtl" : "ltr";
-    return { orientation, readingDirection };
-  } catch {
-    return { orientation: "portrait", readingDirection: "ltr" };
-  }
-}
 
 export function BodyTypeSelector({
   initialType = "text",
@@ -65,6 +25,8 @@ export function BodyTypeSelector({
   initialPdfUrl = null,
   initialOrientation = "portrait",
   initialReadingDirection = "ltr",
+  playId,
+  locked = false,
 }: Props) {
   const [bodyType, setBodyType] = useState<BodyType>(initialType);
   const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
@@ -73,20 +35,22 @@ export function BodyTypeSelector({
   const [pdfUrl, setPdfUrl] = useState<string>(initialPdfUrl || "");
   const [uploading, setUploading] = useState(false);
   const [pdfFileName, setPdfFileName] = useState<string>("");
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPdfError(null);
     // MIME か 拡張子のどちらかで PDF と判定できればOK
     const isPdf =
       file.type === "application/pdf" ||
       file.name.toLowerCase().endsWith(".pdf");
     if (!isPdf) {
-      alert("PDFファイルを選択してください");
+      setPdfError("PDFファイルを選択してください");
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      alert("20MB以下のPDFを選択してください");
+      setPdfError("20MB以下のPDFを選択してください");
       return;
     }
 
@@ -108,7 +72,7 @@ export function BodyTypeSelector({
       const { pdfUrl: url } = await res.json();
       setPdfUrl(url);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "アップロードに失敗しました");
+      setPdfError(err instanceof Error ? err.message : "アップロードに失敗しました");
       setPdfFileName("");
     } finally {
       setUploading(false);
@@ -117,49 +81,54 @@ export function BodyTypeSelector({
 
   return (
     <div className="space-y-4">
-      {/* フォーマット切替 */}
-      <div className="flex gap-1 rounded-lg bg-gray-100 p-1 w-fit">
-        <button
-          type="button"
-          onClick={() => setBodyType("text")}
-          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            bodyType === "text" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          テキスト入力
-        </button>
-        <button
-          type="button"
-          onClick={() => setBodyType("pdf")}
-          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            bodyType === "pdf" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          PDFアップロード
-        </button>
-      </div>
+      {/* フォーマット切替（新規作成時のみ） */}
+      {locked ? (
+        <div className="inline-flex items-center gap-2 rounded-md bg-gray-100 px-3 py-1.5 text-xs text-gray-600">
+          形式：
+          <span className="font-medium text-gray-900">
+            {bodyType === "text" ? "テキスト入力" : bodyType === "pdf" ? "PDFアップロード" : "執筆エディタ"}
+          </span>
+          <span className="text-gray-400">（新規作成時に決定）</span>
+        </div>
+      ) : (
+        <div className="flex gap-1 rounded-lg bg-gray-100 p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setBodyType("text")}
+            disabled={bodyType === "editor"}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              bodyType === "text" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-500`}
+          >
+            テキスト入力
+          </button>
+          <button
+            type="button"
+            onClick={() => setBodyType("pdf")}
+            disabled={bodyType === "editor"}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              bodyType === "pdf" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-500`}
+          >
+            PDFアップロード
+          </button>
+          <button
+            type="button"
+            onClick={() => setBodyType("editor")}
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              bodyType === "editor" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            執筆エディタ
+          </button>
+        </div>
+      )}
 
       {/* hidden inputs */}
       <input type="hidden" name="bodyType" value={bodyType} />
       <input type="hidden" name="bodyPdfUrl" value={pdfUrl} />
       <input type="hidden" name="bodyOrientation" value={orientation} />
       <input type="hidden" name="readingDirection" value={readingDirection} />
-
-      {/* 読む方向。PDF アップロード時に自動判定されるが、明示指定も可 */}
-      <label className="flex items-center gap-2 text-sm text-gray-600">
-        <input
-          type="checkbox"
-          checked={readingDirection === "rtl"}
-          onChange={(e) =>
-            setReadingDirection(e.target.checked ? "rtl" : "ltr")
-          }
-          className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-400"
-        />
-        縦書き（右から左へ進む）
-        <span className="text-xs text-gray-400">
-          ※ PDF は自動判定、必要に応じて切替
-        </span>
-      </label>
 
       {/* テキスト入力 */}
       {bodyType === "text" && (
@@ -174,7 +143,8 @@ export function BodyTypeSelector({
 
       {/* PDF アップロード */}
       {bodyType === "pdf" && (
-        <div>
+        <div className="space-y-3">
+          {pdfError && <Banner variant="error">{pdfError}</Banner>}
           {pdfUrl ? (
             <div className="rounded-lg border border-gray-200 p-4 space-y-3">
               <div className="flex items-center gap-3">
@@ -218,6 +188,36 @@ export function BodyTypeSelector({
                 className="hidden"
               />
             </label>
+          )}
+        </div>
+      )}
+
+      {/* 執筆エディタへの導線 */}
+      {bodyType === "editor" && (
+        <div className="rounded-lg border border-gray-200 p-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-pink-50">
+              <PenLine className="h-5 w-5 text-pink-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-800">執筆エディタで本文を編集</p>
+              <p className="text-xs text-gray-400">
+                ト書き・台詞などの構造を持った戯曲を、専用エディタで執筆できます（自動保存）。執筆エディタを選んでいる間は、テキスト入力・PDFアップロードは利用できません。
+              </p>
+            </div>
+          </div>
+          {playId ? (
+            <Link
+              href={`/editor/${playId}`}
+              className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+            >
+              <PenLine className="h-4 w-4" />
+              執筆エディタを開く
+            </Link>
+          ) : (
+            <p className="text-xs text-gray-500">
+              先に「保存」して作品を作成すると、執筆エディタが開けるようになります。
+            </p>
           )}
         </div>
       )}

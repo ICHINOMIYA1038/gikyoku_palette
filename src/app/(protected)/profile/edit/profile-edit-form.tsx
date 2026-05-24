@@ -17,7 +17,7 @@ import { AvatarUpload } from "@/components/profile/avatar-upload";
 
 type UserProfile = {
   id: string;
-  displayName: string;
+  displayName: string | null;
   bio: string | null;
   avatarUrl: string | null;
 };
@@ -48,7 +48,7 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
             <Label>プロフィール画像</Label>
             <AvatarUpload
               initialAvatarUrl={profile.avatarUrl}
-              fallbackLabel={profile.displayName}
+              fallbackLabel={profile.displayName ?? ""}
             />
           </div>
 
@@ -57,7 +57,7 @@ export function ProfileEditForm({ profile }: { profile: UserProfile }) {
             <Input
               id="displayName"
               name="displayName"
-              defaultValue={profile.displayName}
+              defaultValue={profile.displayName ?? ""}
               placeholder="表示名を入力"
               required
               maxLength={50}

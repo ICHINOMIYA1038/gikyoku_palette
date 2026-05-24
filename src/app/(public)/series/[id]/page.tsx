@@ -117,11 +117,11 @@ export default async function SeriesDetailPage({ params }: Props) {
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-400">
                       <span className="inline-flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" />
-                        {play.durationMinutes}分
+                        {play.durationMinutes != null ? `${play.durationMinutes}分` : "未定"}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" />
-                        {play.castTotal}人
+                        {play.castTotal != null ? `${play.castTotal}人` : "未定"}
                       </span>
                       <span className="font-medium text-gray-600">
                         {play.isFree ? "無料" : `¥${play.feeAmount.toLocaleString()}`}

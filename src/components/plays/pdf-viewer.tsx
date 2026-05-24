@@ -12,7 +12,9 @@ import {
 
 type Props = {
   src: string;
-  title: string;
+  /** ファイル名としては未使用だが、呼び出し側で渡している既存 API を維持 */
+  title?: string;
+  /** 横向きPDFを示すフラグ。現状レイアウト分岐には使っていないが互換のため受け取る */
   orientation?: "portrait" | "landscape";
   /** 'rtl' = 縦書き戯曲（右→左で進む）。キー操作・クリックゾーン・矢印アイコンを反転 */
   readingDirection?: "ltr" | "rtl";
@@ -20,13 +22,14 @@ type Props = {
 
 export function PdfViewer({
   src,
-  title,
-  orientation = "portrait",
   readingDirection = "ltr",
 }: Props) {
   const isRtl = readingDirection === "rtl";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // pdfjs-dist の `PDFDocumentProxy` を直接型注釈に使うと top-level import が必要で、
+  // dynamic import の遅延ロードの旨味が薄れる。ここはランタイムでだけ使うため unknown 扱い。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pdf, setPdf] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);

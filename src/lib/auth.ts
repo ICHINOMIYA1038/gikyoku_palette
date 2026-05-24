@@ -25,11 +25,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (!user.email) return false;
 
       // Upsert user in the shared User table
-      const existingUsers = await prisma.$queryRaw<any[]>`
+      const existingUsers = await prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM "public"."User" WHERE email = ${user.email}
       `;
 
@@ -79,10 +79,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
-    async jwt({ token, user, profile }) {
+    async jwt({ token, user }) {
       if (user?.email) {
         // Fetch user ID from DB
-        const users = await prisma.$queryRaw<any[]>`
+        const users = await prisma.$queryRaw<Array<{ id: string; displayName: string | null; name: string | null }>>`
           SELECT id, "displayName", name FROM "public"."User" WHERE email = ${user.email}
         `;
         if (users[0]) {

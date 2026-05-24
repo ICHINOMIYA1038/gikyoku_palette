@@ -40,7 +40,7 @@ const LINE_PITCH_RATIO = 1.5;
 
 // ─── 計算値 ───
 const CONTENT_W = PAGE_W - M_LEFT - M_RIGHT; // 本文エリア幅
-const CONTENT_H = PAGE_H - M_TOP - M_BOTTOM; // 本文エリア高さ
+const _CONTENT_H = PAGE_H - M_TOP - M_BOTTOM; // 本文エリア高さ（参考値、未使用）
 const COL_W = Math.floor(CONTENT_W / COLS_PER_PAGE); // 列幅
 const SPEAKER_MAX_CHARS = 5; // 話者名最大表示文字数
 const SPEAKER_AREA_H = Math.round(SPEAKER_FONT_SIZE * SPEAKER_MAX_CHARS + 12); // 話者名エリア高さ
@@ -197,7 +197,7 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
   const cols: ColLayout[] = [];
   let px = 0; // 右端からのピクセルオフセット
   let page = 0;
-  let colsOnPage = 0;
+  let _colsOnPage = 0;
   let lastBlockIndex = -1;
   let lastBlockType: string | null = null;
   let isFirstColOfBlock = true;
@@ -205,11 +205,11 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
   const CONTENT_W_LIMIT = PAGE_W - M_LEFT - M_RIGHT;
   const advanceCol = (width: number = COL_W) => {
     px += width;
-    colsOnPage++;
+    _colsOnPage++;
     // ページ送りは横幅基準。コンテンツ幅を超えそうなら次ページへ
     if (px >= CONTENT_W_LIMIT) {
       page++;
-      colsOnPage = 0;
+      _colsOnPage = 0;
       px = 0;
     }
   };
@@ -279,11 +279,17 @@ export function computeColumns(doc: PlayDocument): ColLayout[] {
       }
 
       default: {
-        const fieldName = block.type === "serif" ? "speech" : "text";
-        const text = block.type === "serif" ? (block.speech || "") : ((block as any).text || "");
+        const fieldName: ColLayout["field"] =
+          block.type === "serif" ? "speech" : "text";
+        const text =
+          block.type === "serif"
+            ? block.speech || ""
+            : "text" in block
+            ? block.text || ""
+            : "";
         const lines = splitTextByNewline(text, CHARS_PER_COL);
         for (const line of lines) {
-          cols.push({ blockIndex: bi, field: fieldName as any, x: colX(px), chars: line.chars, startCharIndex: line.startCharIndex, page });
+          cols.push({ blockIndex: bi, field: fieldName, x: colX(px), chars: line.chars, startCharIndex: line.startCharIndex, page });
           advanceCol(colWidthFor());
         }
         break;
@@ -322,8 +328,9 @@ export function drawScript(
   if (cursorOut) cursorOut.rect = null;
   const _cur = cursorOut; // 内側でdrawCursorLineに渡せるよう別名
   const cfg = doc.typesetting || DEFAULT_TYPESETTING;
-  const bodyFont = fontStr(FONT_SIZE, cfg);
-  const speakerFont = fontStr(SPEAKER_FONT_SIZE, cfg, true);
+  // 計算済みフォント文字列（draw-* 関数内では再計算するためここでは未使用）
+  const _bodyFont = fontStr(FONT_SIZE, cfg);
+  const _speakerFont = fontStr(SPEAKER_FONT_SIZE, cfg, true);
 
   ctx.clearRect(0, 0, PAGE_W, PAGE_H);
   ctx.fillStyle = "#fff";
@@ -331,8 +338,12 @@ export function drawScript(
 
   // ヘッダー
   if (cfg.showHeader) {
-    const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
-    const headerText = cfg.headerText || (titleBlock?.title ? `『${titleBlock.title}』${titleBlock.author || ""}` : "");
+    const titleBlock = doc.blocks.find((b) => b.type === "title");
+    const headerText =
+      cfg.headerText ||
+      (titleBlock && titleBlock.type === "title" && titleBlock.title
+        ? `『${titleBlock.title}』${titleBlock.author || ""}`
+        : "");
     if (headerText) {
       ctx.font = fontStr(11, cfg);
       ctx.fillStyle = "#888";
@@ -782,7 +793,7 @@ export function hitTestScript(
   const tCharH = isTg ? (TOGAKI_FONT_SIZE + Math.round(TOGAKI_FONT_SIZE * 0.35)) : CHAR_H;
   const tIndent = isTg ? TOGAKI_INDENT_CHARS * CHAR_H : 0;
   const li = Math.min(Math.floor((my - BODY_TOP - tIndent) / tCharH), bestCol.chars.length);
-  return { blockIndex: bestCol.blockIndex, field: bestCol.field as any, charIndex: bestCol.startCharIndex + Math.max(0, li) };
+  return { blockIndex: bestCol.blockIndex, field: bestCol.field, charIndex: bestCol.startCharIndex + Math.max(0, li) };
 }
 
 export function getMaxPage(cols: ColLayout[]): number {

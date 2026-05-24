@@ -71,7 +71,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         setSaveStatus("saving");
         try {
           const result = await savePlayBody(playId, toBodyJson(newDoc));
-          setSaveStatus(result?.error ? "error" : "saved");
+          setSaveStatus(result.success ? "saved" : "error");
         } catch { setSaveStatus("error"); }
       }, 800);
     },
@@ -668,6 +668,20 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     [selAnchor, cursor, blockDrag, scriptDrag, containerSize, doc, reorderBlock]
   );
 
+  // 選択範囲を削除して新しいテキストに置き換え
+  // handleKeyDown より前に置かないと hoisting で React Compiler に怒られる
+  const deleteSelection = useCallback((): string | null => {
+    if (!selAnchor || selAnchor.blockIndex !== cursor.blockIndex || selAnchor.field !== cursor.field) return null;
+    const text = getFieldText(cursor);
+    const start = Math.min(selAnchor.charIndex, cursor.charIndex);
+    const end = Math.max(selAnchor.charIndex, cursor.charIndex);
+    if (start === end) return null;
+    const newText = text.slice(0, start) + text.slice(end);
+    setSelAnchor(null);
+    setCursor({ ...cursor, charIndex: start });
+    return newText;
+  }, [selAnchor, cursor, getFieldText]);
+
   // キーボード
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -921,19 +935,6 @@ export function CanvasEditor({ playId, initialContent }: Props) {
     },
     [cursor, doc, getFieldText, updateDoc, pushHistory, undo, mode, moveBlock]
   );
-
-  // 選択範囲を削除して新しいテキストに置き換え
-  const deleteSelection = useCallback((): string | null => {
-    if (!selAnchor || selAnchor.blockIndex !== cursor.blockIndex || selAnchor.field !== cursor.field) return null;
-    const text = getFieldText(cursor);
-    const start = Math.min(selAnchor.charIndex, cursor.charIndex);
-    const end = Math.max(selAnchor.charIndex, cursor.charIndex);
-    if (start === end) return null;
-    const newText = text.slice(0, start) + text.slice(end);
-    setSelAnchor(null);
-    setCursor({ ...cursor, charIndex: start });
-    return newText;
-  }, [selAnchor, cursor, getFieldText]);
 
   // テキスト入力（通常入力 + ペースト共通）
   const applyTextChange = useCallback(

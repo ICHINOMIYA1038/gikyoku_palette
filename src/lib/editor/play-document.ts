@@ -136,30 +136,47 @@ export function toBodyJson(doc: PlayDocument): Record<string, unknown> {
   };
 }
 
+/** TipTap互換のノード（v1形式での後方互換用） */
+type TipTapNode = {
+  type?: string;
+  text?: string;
+  content?: TipTapNode[];
+};
+
+/** v2形式の bodyJson 構造（version=2 のとき） */
+type BodyJsonV2 = {
+  version?: number;
+  blocks?: Block[];
+  typesetting?: PlayDocument["typesetting"];
+  content?: TipTapNode[];
+};
+
 /** bodyJson → PlayDocument に変換 */
 export function fromBodyJson(
   json: Record<string, unknown> | null
 ): PlayDocument {
   if (!json) return EMPTY_DOC;
 
+  const j = json as BodyJsonV2;
+
   // v2形式（新フォーマット）
-  if ((json as any).version === 2 && Array.isArray((json as any).blocks)) {
+  if (j.version === 2 && Array.isArray(j.blocks)) {
     return {
-      blocks: (json as any).blocks,
-      typesetting: (json as any).typesetting || DEFAULT_TYPESETTING,
+      blocks: j.blocks,
+      typesetting: j.typesetting || DEFAULT_TYPESETTING,
     };
   }
 
   // v1形式（TipTap互換）— 後方互換
-  if (Array.isArray((json as any).content)) {
+  if (Array.isArray(j.content)) {
     const blocks: Block[] = [];
-    for (const node of (json as any).content) {
+    for (const node of j.content) {
       if (node.type === "serif") {
         const speaker = getNodeText(
-          node.content?.find((c: any) => c.type === "speaker")
+          node.content?.find((c) => c.type === "speaker")
         );
         const speech = getNodeText(
-          node.content?.find((c: any) => c.type === "speechContent")
+          node.content?.find((c) => c.type === "speechContent")
         );
         blocks.push({ type: "serif", speaker, speech });
       } else if (node.type === "togaki") {
@@ -174,7 +191,7 @@ export function fromBodyJson(
   return EMPTY_DOC;
 }
 
-function getNodeText(node: any): string {
+function getNodeText(node: TipTapNode | undefined): string {
   if (!node) return "";
   if (node.text) return node.text;
   if (!node.content) return "";

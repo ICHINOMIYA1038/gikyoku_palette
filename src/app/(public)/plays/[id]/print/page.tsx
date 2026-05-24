@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PrintButton } from "@/components/plays/print-button";
+import { formatCast, formatDuration } from "@/lib/format";
 import Link from "next/link";
 
 type Props = { params: Promise<{ id: string }> };
@@ -28,9 +29,9 @@ export default async function PrintPlayPage({ params }: Props) {
   }
 
   // Get author name
-  const authors = await prisma.$queryRaw<
-    any[]
-  >`SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}`;
+  const authors = await prisma.$queryRaw<Array<{ displayName: string | null }>>`
+    SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}
+  `;
   const authorName = authors[0]?.displayName ?? "不明";
 
   return (
@@ -87,8 +88,8 @@ export default async function PrintPlayPage({ params }: Props) {
 
         {/* Meta info */}
         <div className="mb-6 flex justify-between text-sm text-muted-foreground">
-          <span>上演時間：{play.durationMinutes}分</span>
-          <span>出演：{play.castTotal}人</span>
+          <span>上演時間：{formatDuration(play.durationMinutes)}</span>
+          <span>出演：{formatCast(play.castTotal)}</span>
         </div>
 
         {/* Synopsis */}

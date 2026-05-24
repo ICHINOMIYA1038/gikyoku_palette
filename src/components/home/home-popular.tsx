@@ -4,15 +4,16 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Eye, Star, Clock, Users } from "lucide-react";
+import { Eye, Star } from "lucide-react";
+import { PlayMetaInline } from "@/components/plays/play-meta-inline";
 
 type Play = {
   id: string;
   title: string;
   coverImageUrl: string | null;
   authorName: string;
-  durationMinutes: number;
-  castTotal: number;
+  durationMinutes: number | null;
+  castTotal: number | null;
   isFree: boolean;
   feeAmount: number;
   viewCount: number;
@@ -77,14 +78,11 @@ export function HomePopular({ plays }: { plays: Play[] }) {
                 </p>
                 <p className="truncate text-xs text-gray-500">{p.authorName}</p>
                 <div className="mt-1 flex items-center gap-3 text-[11px] text-gray-400">
-                  <span className="inline-flex items-center gap-0.5">
-                    <Clock className="h-3 w-3" />
-                    {p.durationMinutes}分
-                  </span>
-                  <span className="inline-flex items-center gap-0.5">
-                    <Users className="h-3 w-3" />
-                    {p.castTotal}人
-                  </span>
+                  <PlayMetaInline
+                    durationMinutes={p.durationMinutes}
+                    castTotal={p.castTotal}
+                    size="sm"
+                  />
                   <span className="inline-flex items-center gap-0.5">
                     <Eye className="h-3 w-3" />
                     {p.viewCount.toLocaleString()}

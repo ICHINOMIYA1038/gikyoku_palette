@@ -1,6 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getRankings } from "@/actions/rankings";
-import { Eye, Star, Download, Clock, Users } from "lucide-react";
+import { Eye, Star, Download } from "lucide-react";
+import { PlayMetaInline } from "@/components/plays/play-meta-inline";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -19,7 +21,14 @@ const TABS: { value: RankingType; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-function getStatLabel(play: any, type: RankingType): string {
+type StatPlay = {
+  avgRating?: number | null;
+  reviewCount?: number | null;
+  downloadCount?: number | null;
+  viewCount?: number | null;
+};
+
+function getStatLabel(play: StatPlay, type: RankingType): string {
   switch (type) {
     case "rating":
       return `${play.avgRating?.toFixed(1) ?? "-"} (${play.reviewCount ?? 0}件)`;
@@ -128,14 +137,11 @@ export default async function RankingsPage({
                           {play.author.displayName}
                         </p>
                         <div className="flex gap-3 text-xs text-gray-400 mt-2">
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            {play.durationMinutes}分
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
-                            {play.castTotal}人
-                          </span>
+                          <PlayMetaInline
+                            durationMinutes={play.durationMinutes}
+                            castTotal={play.castTotal}
+                            size="md"
+                          />
                           <span className="font-medium text-gray-700">
                             {getStatLabel(play, type)}
                           </span>
@@ -149,11 +155,13 @@ export default async function RankingsPage({
 
                       {/* Cover Thumbnail */}
                       {play.coverImageUrl && (
-                        <div className="hidden sm:block shrink-0 w-20 h-20 rounded-md overflow-hidden">
-                          <img
+                        <div className="hidden sm:block shrink-0 w-20 h-20 rounded-md overflow-hidden relative">
+                          <Image
                             src={play.coverImageUrl}
                             alt=""
-                            className="w-full h-full object-cover"
+                            fill
+                            sizes="80px"
+                            className="object-cover"
                           />
                         </div>
                       )}
@@ -178,12 +186,14 @@ export default async function RankingsPage({
                     </span>
 
                     {/* Cover Thumbnail */}
-                    <div className="hidden sm:block h-12 w-12 shrink-0 overflow-hidden rounded bg-gray-100">
+                    <div className="hidden sm:block h-12 w-12 shrink-0 overflow-hidden rounded bg-gray-100 relative">
                       {play.coverImageUrl ? (
-                        <img
+                        <Image
                           src={play.coverImageUrl}
                           alt=""
-                          className="h-full w-full object-cover"
+                          fill
+                          sizes="48px"
+                          className="object-cover"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center font-serif text-base text-gray-300">
@@ -200,16 +210,12 @@ export default async function RankingsPage({
                       <p className="truncate text-xs text-gray-500">
                         {play.author.displayName}
                       </p>
-                      <div className="mt-0.5 flex items-center gap-3 text-[11px] text-gray-400">
-                        <span className="inline-flex items-center gap-0.5">
-                          <Clock className="h-3 w-3" />
-                          {play.durationMinutes}分
-                        </span>
-                        <span className="inline-flex items-center gap-0.5">
-                          <Users className="h-3 w-3" />
-                          {play.castTotal}人
-                        </span>
-                      </div>
+                      <PlayMetaInline
+                        durationMinutes={play.durationMinutes}
+                        castTotal={play.castTotal}
+                        size="sm"
+                        className="mt-0.5"
+                      />
                     </div>
 
                     {/* Stat */}

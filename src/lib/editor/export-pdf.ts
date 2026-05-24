@@ -1,5 +1,10 @@
 "use client";
 
+// クライアントサイド PDF 生成。執筆エディタの「PDFエクスポート」で使用。
+// サーバサイドの PDF 生成（作品ダウンロード／許可証）は @react-pdf/renderer を使う：
+//   - src/app/api/plays/[id]/pdf/route.ts
+//   - src/app/api/permissions/[id]/certificate/route.ts
+// 両者は用途が異なるため統合しない（jsPDF は canvas/座標ベース、@react-pdf は JSX 宣言型）。
 import { jsPDF } from "jspdf";
 import type { PlayDocument } from "./play-document";
 import { computeColumns, drawScript, getMaxPage, PAGE_W, PAGE_H } from "./draw-script";
@@ -25,7 +30,8 @@ export async function exportPdf(doc: PlayDocument) {
     pdf.addImage(img, "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
   }
 
-  const titleBlock = doc.blocks.find((b) => b.type === "title") as any;
-  const filename = `${titleBlock?.title || "戯曲"}.pdf`;
+  const titleBlock = doc.blocks.find((b) => b.type === "title");
+  const title = titleBlock && titleBlock.type === "title" ? titleBlock.title : "";
+  const filename = `${title || "戯曲"}.pdf`;
   pdf.save(filename);
 }

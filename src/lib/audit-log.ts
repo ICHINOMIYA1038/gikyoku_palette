@@ -4,7 +4,8 @@ export async function logSecurityEvent(event: {
   ip?: string;
   details?: string;
 }) {
-  // Log to console in structured format for Vercel logs
+  // 構造化ログ。Vercel のログ収集が拾えるよう warn 経由で出す（console.log は eslint で禁止）。
+  // eslint-disable-next-line no-console
   console.log(JSON.stringify({
     audit: true,
     timestamp: new Date().toISOString(),

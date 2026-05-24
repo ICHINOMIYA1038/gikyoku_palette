@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/db";
+import { getPublicUsersByIds, unknownUser, type PublicUser } from "@/lib/users";
 
 type RankingType = "views" | "rating" | "downloads";
 
@@ -30,21 +31,12 @@ export async function getRankings(type: RankingType = "views", limit = 50) {
   });
 
   const authorIds = [...new Set(plays.map((p) => p.authorId))];
-  let authorMap = new Map<string, any>();
-  if (authorIds.length > 0) {
-    const authors = await prisma.$queryRaw<any[]>`
-      SELECT id, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${authorIds})
-    `;
-    authorMap = new Map(authors.map((a: any) => [a.id, a]));
-  }
+  const authorMap: Map<string, PublicUser> = await getPublicUsersByIds(authorIds);
 
   return plays.map((p, i) => ({
     rank: i + 1,
     ...p,
-    author: authorMap.get(p.authorId) || {
-      id: p.authorId,
-      displayName: "不明",
-    },
+    author: authorMap.get(p.authorId) ?? unknownUser(p.authorId),
   }));
 }
 
@@ -57,21 +49,11 @@ export async function getPopularPlays(limit = 6) {
   });
 
   const authorIds = [...new Set(plays.map((p) => p.authorId))];
-  let authorMap = new Map<string, any>();
-  if (authorIds.length > 0) {
-    const authors = await prisma.$queryRaw<any[]>`
-      SELECT id, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${authorIds})
-    `;
-    authorMap = new Map(authors.map((a: any) => [a.id, a]));
-  }
+  const authorMap: Map<string, PublicUser> = await getPublicUsersByIds(authorIds);
 
   return plays.map((p) => ({
     ...p,
     bodyPreview: p.body ? p.body.slice(0, 300) : null,
-    author: authorMap.get(p.authorId) || {
-      id: p.authorId,
-      displayName: "不明",
-      avatarUrl: null,
-    },
+    author: authorMap.get(p.authorId) ?? unknownUser(p.authorId),
   }));
 }

@@ -34,10 +34,10 @@ function blockPreview(b: Block): string {
   switch (b.type) {
     case "title": return b.title || "(無題)";
     case "castList": return b.characters.map((c) => c.name).join("、") || "(未入力)";
-    case "serif": return `${(b as any).speaker || "?"}: ${(b as any).speech?.slice(0, 20) || ""}`;
-    case "togaki": return (b as any).text?.slice(0, 24) || "(未入力)";
-    case "sceneHeading": return (b as any).text || "(未入力)";
-    case "endMark": return (b as any).text || "おわり";
+    case "serif": return `${b.speaker || "?"}: ${b.speech?.slice(0, 20) || ""}`;
+    case "togaki": return b.text?.slice(0, 24) || "(未入力)";
+    case "sceneHeading": return b.text || "(未入力)";
+    case "endMark": return b.text || "おわり";
     default: return "";
   }
 }

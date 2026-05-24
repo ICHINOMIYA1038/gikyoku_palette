@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Banner } from "@/components/ui/banner";
 import Link from "next/link";
 
 type DownloadButtonProps = {
@@ -14,14 +15,16 @@ type DownloadButtonProps = {
 
 export function DownloadButton({ playId, title, hasBody, bodyType, bodyPdfUrl }: DownloadButtonProps) {
   const [isDownloading, setIsDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDownload = async () => {
     setIsDownloading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/plays/${playId}/download`);
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "ダウンロードに失敗しました");
+        setError(data.error || "ダウンロードに失敗しました");
         return;
       }
       const blob = await res.blob();
@@ -34,7 +37,7 @@ export function DownloadButton({ playId, title, hasBody, bodyType, bodyPdfUrl }:
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      alert("ダウンロードに失敗しました");
+      setError("ダウンロードに失敗しました");
     } finally {
       setIsDownloading(false);
     }
@@ -76,7 +79,9 @@ export function DownloadButton({ playId, title, hasBody, bodyType, bodyPdfUrl }:
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-2">
+      {error && <Banner variant="error">{error}</Banner>}
+      <div className="flex flex-wrap items-center gap-2">
       <Button
         variant="outline"
         onClick={handleDownload}
@@ -102,6 +107,7 @@ export function DownloadButton({ playId, title, hasBody, bodyType, bodyPdfUrl }:
         <PrintIcon />
         印刷
       </Link>
+      </div>
     </div>
   );
 }

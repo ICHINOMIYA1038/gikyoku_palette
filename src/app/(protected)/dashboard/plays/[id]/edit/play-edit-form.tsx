@@ -88,7 +88,9 @@ export function PlayEditForm({
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">本文</label>
             <BodyTypeSelector
-              initialType={(firstString(v?.bodyType) as "text" | "pdf") || (play.bodyType as "text" | "pdf") || "text"}
+              playId={play.id}
+              locked
+              initialType={(firstString(v?.bodyType) as "text" | "pdf" | "editor") || (play.bodyType as "text" | "pdf" | "editor") || "text"}
               initialBody={firstString(v?.body) ?? play.body ?? ""}
               initialPdfUrl={firstString(v?.bodyPdfUrl) ?? play.bodyPdfUrl}
               initialOrientation={(firstString(v?.bodyOrientation) as "portrait" | "landscape") || (play.bodyOrientation as "portrait" | "landscape") || "portrait"}
@@ -99,11 +101,11 @@ export function PlayEditForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="durationMinutes">上演時間（分）</Label>
-              <Input id="durationMinutes" name="durationMinutes" type="number" defaultValue={sv("durationMinutes", play.durationMinutes)} required />
+              <Input id="durationMinutes" name="durationMinutes" type="number" defaultValue={sv("durationMinutes", play.durationMinutes)} placeholder="未定" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="castTotal">出演人数（合計）</Label>
-              <Input id="castTotal" name="castTotal" type="number" defaultValue={sv("castTotal", play.castTotal)} required />
+              <Input id="castTotal" name="castTotal" type="number" defaultValue={sv("castTotal", play.castTotal)} placeholder="未定" />
             </div>
           </div>
 

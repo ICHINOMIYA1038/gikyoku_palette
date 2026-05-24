@@ -1,3 +1,5 @@
+// サーバサイド PDF 生成（作品閲覧用ダウンロード）。
+// 執筆エディタからのエクスポートは jsPDF（src/lib/editor/export-pdf.ts）。
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
@@ -82,8 +84,8 @@ function PlayPDF({
     title: string;
     synopsis: string;
     body: string | null;
-    durationMinutes: number;
-    castTotal: number;
+    durationMinutes: number | null;
+    castTotal: number | null;
   };
   authorName: string;
 }) {
@@ -106,12 +108,12 @@ function PlayPDF({
         React.createElement(
           Text,
           { style: styles.meta },
-          `上演時間：${play.durationMinutes}分`
+          `上演時間：${play.durationMinutes != null ? `${play.durationMinutes}分` : "未定"}`
         ),
         React.createElement(
           Text,
           { style: styles.meta },
-          `出演：${play.castTotal}人`
+          `出演：${play.castTotal != null ? `${play.castTotal}人` : "未定"}`
         )
       ),
       React.createElement(Text, { style: styles.synopsisLabel }, "あらすじ"),
@@ -124,6 +126,7 @@ function PlayPDF({
       ),
       React.createElement(
         Text,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { style: styles.footer, fixed: true } as any,
         `戯曲パレット - ${play.title}`
       )
@@ -156,13 +159,14 @@ export async function GET(
   }
 
   // Get author name via raw SQL
-  const authors = await prisma.$queryRaw<
-    any[]
-  >`SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}`;
+  const authors = await prisma.$queryRaw<Array<{ displayName: string | null }>>`
+    SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}
+  `;
   const authorName = authors[0]?.displayName ?? "不明";
 
   try {
     const pdfBuffer = await renderToBuffer(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       React.createElement(PlayPDF, { play, authorName }) as any
     );
 

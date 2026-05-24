@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getPublicUsersByIds, unknownUser } from "@/lib/users";
+import { getPlayIfOwner, requireUserId } from "@/lib/auth-helpers";
 
 const MAX_TAGS_PER_PLAY = 10;
 const MAX_TAG_LENGTH = 30;
@@ -69,25 +69,13 @@ export async function getPlaysByTagSlug(slug: string, page = 1, perPage = 20) {
 
   // author lookup
   const authorIds = [...new Set(plays.map((p) => p.authorId))];
-  const authors =
-    authorIds.length > 0
-      ? await prisma.$queryRaw<any[]>`
-          SELECT id, name, "displayName", "avatarUrl"
-          FROM "public"."User" WHERE id = ANY(${authorIds})
-        `
-      : [];
-  const authorMap = new Map(authors.map((a: any) => [a.id, a]));
+  const authorMap = await getPublicUsersByIds(authorIds);
 
   return {
     tag,
     plays: plays.map((p) => ({
       ...p,
-      author:
-        authorMap.get(p.authorId) || {
-          id: p.authorId,
-          displayName: "不明",
-          avatarUrl: null,
-        },
+      author: authorMap.get(p.authorId) ?? unknownUser(p.authorId),
     })),
     total,
     totalPages: Math.ceil(total / perPage),
@@ -123,8 +111,7 @@ export async function setPlayTagsForm(
 }
 
 export async function setPlayTags(playId: string, rawTagNames: string[]) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   const parsed = setTagsSchema.safeParse({
     playId,
@@ -132,14 +119,8 @@ export async function setPlayTags(playId: string, rawTagNames: string[]) {
   });
   if (!parsed.success) return { error: "不正な入力です" };
 
-  const play = await prisma.palettePlay.findUnique({
-    where: { id: playId },
-    select: { id: true, authorId: true },
-  });
-  if (!play) return { error: "作品が見つかりません" };
-  if (play.authorId !== session.user.id) {
-    return { error: "権限がありません" };
-  }
+  const play = await getPlayIfOwner(playId, userId);
+  if (!play) return { error: "権限がありません" };
 
   // 正規化 + 重複排除
   const normalized: { slug: string; name: string }[] = [];

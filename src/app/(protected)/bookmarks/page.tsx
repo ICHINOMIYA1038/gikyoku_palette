@@ -55,11 +55,11 @@ export default async function BookmarksPage() {
                   <ul className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
                     <li className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {b.play.durationMinutes}分
+                      {b.play.durationMinutes != null ? `${b.play.durationMinutes}分` : "未定"}
                     </li>
                     <li className="flex items-center gap-1">
                       <Users className="h-3 w-3" />
-                      {b.play.castTotal}人
+                      {b.play.castTotal != null ? `${b.play.castTotal}人` : "未定"}
                     </li>
                     <li>
                       {b.play.isFree

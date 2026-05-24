@@ -4,7 +4,7 @@ import { BookOpen, ArrowRight } from "lucide-react";
 
 type AuthorCardProps = {
   id: string;
-  displayName: string;
+  displayName: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
   playCount: number;
@@ -24,15 +24,15 @@ export function AuthorCard({
     >
       <div className="flex items-start gap-4">
         <Avatar className="h-14 w-14 shrink-0 ring-2 ring-gray-50">
-          <AvatarImage src={avatarUrl || undefined} alt={displayName} />
+          <AvatarImage src={avatarUrl || undefined} alt={displayName ?? "作家"} />
           <AvatarFallback className="text-lg font-medium bg-gradient-to-br from-pink-100 to-pink-200 text-pink-700">
-            {displayName.slice(0, 1)}
+            {(displayName ?? "?").slice(0, 1)}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <h3 className="truncate font-semibold text-gray-900 group-hover:text-pink-700 transition-colors">
-              {displayName}
+              {displayName ?? "名無し"}
             </h3>
             <ArrowRight className="h-4 w-4 text-gray-300 shrink-0 group-hover:text-pink-400 group-hover:translate-x-0.5 transition-all" />
           </div>

@@ -26,9 +26,9 @@ export async function GET(
   }
 
   // Get author name via raw SQL
-  const authors = await prisma.$queryRaw<
-    any[]
-  >`SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}`;
+  const authors = await prisma.$queryRaw<Array<{ displayName: string | null }>>`
+    SELECT "displayName" FROM "public"."User" WHERE id = ${play.authorId}
+  `;
   const authorName = authors[0]?.displayName ?? "不明";
 
   // Increment download count (raw SQL to avoid updating updated_at)

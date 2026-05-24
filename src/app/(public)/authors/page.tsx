@@ -78,7 +78,7 @@ export default async function AuthorsPage({ searchParams }: Props) {
         {authors.length > 0 ? (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-              {authors.map((author: any) => (
+              {authors.map((author) => (
                 <AuthorCard
                   key={author.id}
                   id={author.id}

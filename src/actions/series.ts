@@ -1,23 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-
-const seriesSchema = z.object({
-  title: z.string().min(1, "タイトルを入力してください").max(200),
-  description: z.string().max(2000).optional().or(z.literal("")),
-  coverImageUrl: z
-    .string()
-    .refine(
-      (v) => v === "" || v.startsWith("/") || /^https?:\/\//.test(v),
-      "URLの形式が不正です"
-    )
-    .optional()
-    .or(z.literal("")),
-});
+import { getPublicUser } from "@/lib/users";
+import { getSeriesIfOwner, requireUserId } from "@/lib/auth-helpers";
+import { ok, fail, zodFailure } from "@/lib/action-result";
+import { seriesSchema } from "@/lib/validations/series";
 
 /**
  * シリーズを1件取得。plays は seriesOrder → publishedAt の昇順。
@@ -40,11 +29,9 @@ export async function getSeriesById(id: string, opts: { publishedOnly?: boolean 
 
   if (!series) return null;
 
-  const authors = await prisma.$queryRaw<any[]>`
-    SELECT id, name, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ${series.authorId}
-  `;
+  const author = await getPublicUser(series.authorId);
 
-  return { ...series, author: authors[0] || null };
+  return { ...series, author };
 }
 
 /**
@@ -71,26 +58,18 @@ export async function listMySeries() {
 }
 
 export async function createSeries(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   const parsed = seriesSchema.safeParse({
     title: formData.get("title") || "",
     description: formData.get("description") || "",
     coverImageUrl: formData.get("coverImageUrl") || "",
   });
-
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.flatten().fieldErrors;
-    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
-    return {
-      error: first ? `${first[0]}: ${first[1]![0]}` : "入力内容に誤りがあります",
-    };
-  }
+  if (!parsed.success) return zodFailure(parsed.error, formData);
 
   const series = await prisma.paletteSeries.create({
     data: {
-      authorId: session.user.id,
+      authorId: userId,
       title: parsed.data.title,
       description: parsed.data.description || null,
       coverImageUrl: parsed.data.coverImageUrl || null,
@@ -98,30 +77,20 @@ export async function createSeries(formData: FormData) {
   });
 
   revalidatePath("/dashboard/series");
-  return { success: true, id: series.id };
+  return ok({ id: series.id });
 }
 
 export async function updateSeries(seriesId: string, formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const s = await prisma.paletteSeries.findUnique({ where: { id: seriesId } });
-  if (!s || s.authorId !== session.user.id) {
-    return { error: "権限がありません" };
-  }
+  const userId = await requireUserId();
+  const s = await getSeriesIfOwner(seriesId, userId);
+  if (!s) return fail("権限がありません");
 
   const parsed = seriesSchema.safeParse({
     title: formData.get("title") || "",
     description: formData.get("description") || "",
     coverImageUrl: formData.get("coverImageUrl") || "",
   });
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.flatten().fieldErrors;
-    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
-    return {
-      error: first ? `${first[0]}: ${first[1]![0]}` : "入力内容に誤りがあります",
-    };
-  }
+  if (!parsed.success) return zodFailure(parsed.error, formData);
 
   await prisma.paletteSeries.update({
     where: { id: seriesId },
@@ -134,23 +103,19 @@ export async function updateSeries(seriesId: string, formData: FormData) {
 
   revalidatePath(`/series/${seriesId}`);
   revalidatePath("/dashboard/series");
-  return { success: true };
+  return ok();
 }
 
 export async function deleteSeries(seriesId: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const s = await prisma.paletteSeries.findUnique({ where: { id: seriesId } });
-  if (!s || s.authorId !== session.user.id) {
-    return { error: "権限がありません" };
-  }
+  const userId = await requireUserId();
+  const s = await getSeriesIfOwner(seriesId, userId);
+  if (!s) return fail("権限がありません");
 
   // 作品はそのまま残り、seriesId は SetNull
   await prisma.paletteSeries.delete({ where: { id: seriesId } });
 
   revalidatePath("/dashboard/series");
-  return { success: true };
+  return ok();
 }
 
 /**

@@ -1,22 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Clock, Users, Eye, Star } from "lucide-react";
-
-const NO_IMAGE_URL =
-  "https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/no-image-palette.png";
-
-const ACCENT_COLORS = [
-  "#6366f1", "#0891b2", "#059669", "#d97706",
-  "#dc2626", "#7c3aed", "#2563eb", "#db2777",
-];
-
-function getAccentColor(title: string): string {
-  let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return ACCENT_COLORS[Math.abs(hash) % ACCENT_COLORS.length];
-}
+import { Eye, Star } from "lucide-react";
+import { NO_IMAGE_URL } from "@/lib/constants";
+import { PlayMetaInline } from "@/components/plays/play-meta-inline";
 
 type PlayCardProps = {
   id: string;
@@ -24,8 +10,8 @@ type PlayCardProps = {
   authorName: string;
   authorId: string;
   synopsis: string;
-  durationMinutes: number;
-  castTotal: number;
+  durationMinutes: number | null;
+  castTotal: number | null;
   genres: { name: string }[];
   isFree: boolean;
   feeAmount: number;
@@ -57,16 +43,7 @@ export function PlayCard({
         <div className="px-5 py-3 space-y-2.5 flex-1">
           <p className="text-sm text-gray-500">{authorName}</p>
 
-          <div className="flex items-center gap-4 text-xs text-gray-400">
-            <span className="inline-flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
-              {durationMinutes}分
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />
-              {castTotal}人
-            </span>
-          </div>
+          <PlayMetaInline durationMinutes={durationMinutes} castTotal={castTotal} size="md" />
 
           {genres.length > 0 && (
             <div className="flex flex-wrap gap-1.5">

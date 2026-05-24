@@ -41,11 +41,21 @@ export async function updateProfile(formData: FormData) {
 }
 
 export async function getAuthorProfile(authorId: string) {
-  const author = await prisma.$queryRaw<any[]>`
+  type AuthorProfile = {
+    id: string;
+    name: string | null;
+    displayName: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    groupName: string | null;
+    image: string | null;
+  };
+  const rows = await prisma.$queryRaw<AuthorProfile[]>`
     SELECT id, name, "displayName", bio, "avatarUrl", "groupName", image
     FROM "public"."User" WHERE id = ${authorId}
   `;
-  if (!author[0]) return null;
+  const author = rows[0];
+  if (!author) return null;
 
   const plays = await prisma.palettePlay.findMany({
     where: { authorId, isPublished: true },
@@ -53,17 +63,28 @@ export async function getAuthorProfile(authorId: string) {
     orderBy: { publishedAt: "desc" },
   });
 
-  return { ...author[0], plays };
+  return { ...author, plays };
 }
 
 export async function getCurrentUser() {
   const session = await auth();
   if (!session?.user?.id) return null;
 
-  const users = await prisma.$queryRaw<any[]>`
+  type CurrentUser = {
+    id: string;
+    name: string | null;
+    email: string | null;
+    displayName: string | null;
+    bio: string | null;
+    avatarUrl: string | null;
+    groupName: string | null;
+    image: string | null;
+    role: string | null;
+  };
+  const users = await prisma.$queryRaw<CurrentUser[]>`
     SELECT id, name, email, "displayName", bio, "avatarUrl", "groupName", image, role
     FROM "public"."User" WHERE id = ${session.user.id}
   `;
 
-  return users[0] || null;
+  return users[0] ?? null;
 }

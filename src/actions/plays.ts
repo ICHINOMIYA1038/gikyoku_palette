@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { extractFormValues } from "@/lib/form-values";
-import { z } from "zod";
+import { getPublicUsersByIds, getPublicUserWithBio, unknownUser } from "@/lib/users";
+import { getPlayIfOwner, requireUserId } from "@/lib/auth-helpers";
+import { ok, fail, zodFailure } from "@/lib/action-result";
+import { playSchema, readPlayInput } from "@/lib/validations/play";
+import type { Prisma } from "@prisma/client";
 
 type GetPlaysParams = {
   search?: string;
@@ -82,17 +84,12 @@ export async function getPlays({
 
   // 作者情報を別途取得（Userはpublic schema）
   const authorIds = [...new Set(plays.map((p) => p.authorId))];
-  const authors = authorIds.length > 0
-    ? await prisma.$queryRaw<any[]>`
-        SELECT id, name, "displayName", "avatarUrl" FROM "public"."User" WHERE id = ANY(${authorIds})
-      `
-    : [];
-  const authorMap = new Map(authors.map((a: any) => [a.id, a]));
+  const authorMap = await getPublicUsersByIds(authorIds);
 
   const playsWithAuthor = plays.map((p) => ({
     ...p,
     bodyPreview: p.body ? p.body.slice(0, 300) : null,
-    author: authorMap.get(p.authorId) || { id: p.authorId, displayName: "不明", avatarUrl: null },
+    author: authorMap.get(p.authorId) ?? unknownUser(p.authorId),
   }));
 
   return {
@@ -113,11 +110,9 @@ export async function getPlayById(id: string) {
 
   if (!play) return null;
 
-  const authors = await prisma.$queryRaw<any[]>`
-    SELECT id, name, "displayName", bio, "avatarUrl" FROM "public"."User" WHERE id = ${play.authorId}
-  `;
+  const author = await getPublicUserWithBio(play.authorId);
 
-  return { ...play, author: authors[0] || null };
+  return { ...play, author };
 }
 
 export async function incrementViewCount(id: string) {
@@ -134,7 +129,7 @@ export async function getGenres() {
 export async function getStats() {
   const [playCount, authorCount, reviewCount] = await Promise.all([
     prisma.palettePlay.count({ where: { isPublished: true } }),
-    prisma.$queryRaw<any[]>`SELECT COUNT(DISTINCT author_id)::int as count FROM palette.palette_plays WHERE is_published = true`,
+    prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(DISTINCT author_id)::int as count FROM palette.palette_plays WHERE is_published = true`,
     prisma.paletteReview.count(),
   ]);
   return {
@@ -144,93 +139,14 @@ export async function getStats() {
   };
 }
 
-/**
- * アップロード API は dev では "/api/storage/..." 相対パス、
- * 本番では "https://..." 絶対URL を返すため、両方を許容する。
- */
-const uploadedUrl = z
-  .string()
-  .refine(
-    (v) => v === "" || v.startsWith("/") || /^https?:\/\//.test(v),
-    "URLの形式が不正です"
-  );
-
-/**
- * FormData から playSchema 用の入力オブジェクトを組み立てる。
- * bodyType を切り替えたときに存在しない field（body / bodyPdfUrl）が
- * null になって "expected string, received null" で落ちるため、
- * ここでまとめて空文字・undefined に正規化する。
- */
-function readPlayInput(formData: FormData) {
-  const s = (k: string) => {
-    const v = formData.get(k);
-    return typeof v === "string" ? v : "";
-  };
-  const opt = (k: string) => {
-    const v = formData.get(k);
-    return typeof v === "string" && v.length > 0 ? v : undefined;
-  };
-  return {
-    title: s("title"),
-    synopsis: s("synopsis"),
-    body: s("body"),
-    bodyType: opt("bodyType") || "text",
-    bodyPdfUrl: opt("bodyPdfUrl"),
-    bodyOrientation: opt("bodyOrientation") || "portrait",
-    readingDirection: opt("readingDirection") || "ltr",
-    durationMinutes: s("durationMinutes"),
-    castTotal: s("castTotal"),
-    castMale: opt("castMale") || "0",
-    castFemale: opt("castFemale") || "0",
-    castOther: opt("castOther") || "0",
-    feeAmount: opt("feeAmount") || "0",
-    isFree: formData.get("isFree") === "true",
-    coverImageUrl: opt("coverImageUrl"),
-    seriesId: opt("seriesId"),
-    seriesOrder: opt("seriesOrder"),
-  };
-}
-
-const playSchema = z.object({
-  title: z.string().min(1, "タイトルを入力してください").max(200),
-  synopsis: z.string().min(1, "あらすじを入力してください"),
-  body: z.string().max(500000, "本文は50万文字以内にしてください").optional().default(""),
-  bodyType: z.enum(["text", "pdf", "editor"]).default("text"),
-  bodyPdfUrl: uploadedUrl.optional().or(z.literal("")),
-  bodyOrientation: z.enum(["portrait", "landscape"]).default("portrait"),
-  readingDirection: z.enum(["ltr", "rtl"]).default("ltr"),
-  durationMinutes: z.coerce.number().int().positive("上演時間を入力してください"),
-  castTotal: z.coerce.number().int().positive("出演人数を入力してください"),
-  castMale: z.coerce.number().int().min(0),
-  castFemale: z.coerce.number().int().min(0),
-  castOther: z.coerce.number().int().min(0),
-  feeAmount: z.coerce.number().int().min(0),
-  isFree: z.coerce.boolean(),
-  coverImageUrl: uploadedUrl.optional().or(z.literal("")),
-  seriesId: z.string().optional(),
-  seriesOrder: z.coerce.number().int().positive().optional(),
-});
-
 export async function updatePlay(playId: string, formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
-  const play = await prisma.palettePlay.findUnique({ where: { id: playId } });
-  if (!play || play.authorId !== session.user.id) {
-    return { error: "権限がありません" };
-  }
+  const play = await getPlayIfOwner(playId, userId);
+  if (!play) return fail("権限がありません");
 
   const parsed = playSchema.safeParse(readPlayInput(formData));
-
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.flatten().fieldErrors;
-    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
-    const summary = first
-      ? `${first[0]}: ${first[1]![0]}`
-      : "入力内容に誤りがあります";
-    // 失敗時は入力内容を values で返し、クライアント側で defaultValue に使えるようにする
-    return { error: summary, fieldErrors, values: extractFormValues(formData) };
-  }
+  if (!parsed.success) return zodFailure(parsed.error, formData);
 
   const genreIds = formData.getAll("genreIds").map(Number) as number[];
 
@@ -240,7 +156,7 @@ export async function updatePlay(playId: string, formData: FormData) {
   let safeSeriesId: string | null = null;
   if (seriesId) {
     const s = await prisma.paletteSeries.findUnique({ where: { id: seriesId }, select: { authorId: true } });
-    if (s && s.authorId === session.user.id) safeSeriesId = seriesId;
+    if (s && s.authorId === userId) safeSeriesId = seriesId;
   }
   await prisma.$transaction(async (tx) => {
     await tx.palettePlay.update({
@@ -265,17 +181,14 @@ export async function updatePlay(playId: string, formData: FormData) {
 
   revalidatePath(`/plays/${playId}`);
   revalidatePath("/dashboard/plays");
-  return { success: true };
+  return ok();
 }
 
 export async function togglePublish(playId: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
-  const play = await prisma.palettePlay.findUnique({ where: { id: playId } });
-  if (!play || play.authorId !== session.user.id) {
-    return { error: "権限がありません" };
-  }
+  const play = await getPlayIfOwner(playId, userId);
+  if (!play) return fail("権限がありません");
 
   const isPublished = !play.isPublished;
   const wasFirstPublish = isPublished && !play.publishedAt;
@@ -292,7 +205,7 @@ export async function togglePublish(playId: string) {
   if (wasFirstPublish) {
     const { getFollowerIdsOf } = await import("@/actions/follows");
     const { createNotification } = await import("@/actions/notifications");
-    const followerIds = await getFollowerIdsOf(session.user.id);
+    const followerIds = await getFollowerIdsOf(userId);
     await Promise.all(
       followerIds.map((followerId) =>
         createNotification({
@@ -307,23 +220,14 @@ export async function togglePublish(playId: string) {
 
   revalidatePath("/");
   revalidatePath("/dashboard/plays");
-  return { success: true, isPublished };
+  return ok({ isPublished });
 }
 
 export async function createPlay(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   const parsed = playSchema.safeParse(readPlayInput(formData));
-
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.flatten().fieldErrors;
-    const first = Object.entries(fieldErrors).find(([, v]) => v && v.length > 0);
-    const summary = first
-      ? `${first[0]}: ${first[1]![0]}`
-      : "入力内容に誤りがあります";
-    return { error: summary, fieldErrors, values: extractFormValues(formData) };
-  }
+  if (!parsed.success) return zodFailure(parsed.error, formData);
 
   const { coverImageUrl: coverUrl, bodyPdfUrl, seriesId, seriesOrder, ...restData } = parsed.data;
   const genreIds = formData.getAll("genreIds").map(Number) as number[];
@@ -332,7 +236,7 @@ export async function createPlay(formData: FormData) {
   let safeSeriesId: string | null = null;
   if (seriesId) {
     const s = await prisma.paletteSeries.findUnique({ where: { id: seriesId }, select: { authorId: true } });
-    if (s && s.authorId === session.user.id) safeSeriesId = seriesId;
+    if (s && s.authorId === userId) safeSeriesId = seriesId;
   }
 
   const play = await prisma.palettePlay.create({
@@ -342,7 +246,7 @@ export async function createPlay(formData: FormData) {
       bodyPdfUrl: bodyPdfUrl || null,
       seriesId: safeSeriesId,
       seriesOrder: safeSeriesId ? seriesOrder ?? null : null,
-      authorId: session.user.id,
+      authorId: userId,
     },
   });
 
@@ -353,15 +257,14 @@ export async function createPlay(formData: FormData) {
   }
 
   revalidatePath("/dashboard/plays");
-  return { success: true, id: play.id };
+  return ok({ id: play.id });
 }
 
 /**
  * エディタ即起動用の下書き作成。タイトルだけ受け取り最小構成で作成する。
  */
 export async function createPlayDraft(title: string) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const userId = await requireUserId();
 
   const t = title.trim() || "無題の作品";
   const play = await prisma.palettePlay.create({
@@ -372,14 +275,14 @@ export async function createPlayDraft(title: string) {
       bodyType: "editor",
       bodyOrientation: "portrait",
       readingDirection: "ltr",
-      durationMinutes: 60,
-      castTotal: 1,
-      castMale: 0,
-      castFemale: 0,
-      castOther: 0,
+      durationMinutes: null,
+      castTotal: null,
+      castMale: null,
+      castFemale: null,
+      castOther: null,
       feeAmount: 0,
       isFree: true,
-      authorId: session.user.id,
+      authorId: userId,
     },
   });
   revalidatePath("/dashboard/plays");
@@ -393,16 +296,9 @@ export async function savePlayBody(
   playId: string,
   bodyJson: Record<string, unknown>
 ) {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "認証が必要です" };
-
-  const play = await prisma.palettePlay.findUnique({
-    where: { id: playId },
-    select: { authorId: true },
-  });
-  if (!play || play.authorId !== session.user.id) {
-    return { error: "権限がありません" };
-  }
+  const userId = await requireUserId();
+  const play = await getPlayIfOwner(playId, userId);
+  if (!play) return fail("権限がありません");
 
   // bodyJson からプレーンテキストを抽出して body にも保存（検索用）
   const { fromBodyJson, toPlainText } = await import(
@@ -414,11 +310,11 @@ export async function savePlayBody(
   await prisma.palettePlay.update({
     where: { id: playId },
     data: {
-      bodyJson: bodyJson as any,
+      bodyJson: bodyJson as Prisma.InputJsonValue,
       body: plainText,
       bodyType: "editor",
     },
   });
 
-  return { success: true };
+  return ok();
 }

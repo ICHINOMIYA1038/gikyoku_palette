@@ -419,8 +419,10 @@ export function hitTestHorizontal(
           return { blockIndex: bi, field: "speech", charIndex: block.speech.length };
         case "castList":
           return null;
-        default:
-          return { blockIndex: bi, field: "text", charIndex: ((block as any).text || "").length };
+        default: {
+          const text = "text" in block ? block.text ?? "" : "";
+          return { blockIndex: bi, field: "text", charIndex: text.length };
+        }
       }
     }
   }

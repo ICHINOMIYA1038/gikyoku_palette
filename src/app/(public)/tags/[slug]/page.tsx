@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Hash } from "lucide-react";
-import { getPlaysByTagSlug, getPopularTags } from "@/actions/tags";
+import { getPlaysByTagSlug } from "@/actions/tags";
 import { PlayCard } from "@/components/plays/play-card";
 import { Pagination } from "@/components/ui/pagination";
 
@@ -61,7 +60,7 @@ export default async function TagPage({ params, searchParams }: Props) {
                   synopsis={play.synopsis}
                   durationMinutes={play.durationMinutes}
                   castTotal={play.castTotal}
-                  genres={play.genres.map((pg: any) => ({
+                  genres={play.genres.map((pg) => ({
                     name: pg.genre.name,
                   }))}
                   isFree={play.isFree}

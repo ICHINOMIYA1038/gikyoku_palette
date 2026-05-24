@@ -5,10 +5,16 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { TogglePublishButton } from "./toggle-publish-button";
+import { FlashBanner } from "@/components/flash-banner";
 
 export const metadata = { title: "作品管理" };
 
-export default async function DashboardPlaysPage() {
+export default async function DashboardPlaysPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ created?: string; updated?: string; deleted?: string; error?: string }>;
+}) {
+  const sp = await searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -23,6 +29,7 @@ export default async function DashboardPlaysPage() {
 
   return (
     <div>
+      <FlashBanner params={sp} />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-serif font-bold text-gray-900">
           作品管理

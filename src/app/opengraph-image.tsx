@@ -35,6 +35,7 @@ export default async function Image_() {
       >
         <img
           src={logoBase64}
+          alt="戯曲パレット"
           width={800}
           height={160}
           style={{ objectFit: "contain" }}

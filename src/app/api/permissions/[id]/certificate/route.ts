@@ -283,7 +283,9 @@ function CertificatePDF(c: CertInput) {
       h(View, { style: styles.innerBorder, fixed: true }),
 
       // ページ番号 (2ページ以上のときに意味を持つ)
-      h(Text as any, {
+      // @react-pdf/renderer 側で `render` prop の型が公開されておらず as による回避が必要。
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      h(Text as React.ComponentType<any>, {
         style: styles.pageNumber,
         fixed: true,
         render: ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
@@ -425,6 +427,8 @@ export async function GET(
         isFree: permission.play.isFree,
         issuedAt:
           permission.paidAt || permission.reviewedAt || permission.createdAt,
+      // renderToBuffer の React 型と @react-pdf/renderer の Document 型がズレるためキャスト
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       }) as any
     );
 

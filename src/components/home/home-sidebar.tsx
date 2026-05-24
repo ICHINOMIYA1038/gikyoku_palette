@@ -9,7 +9,7 @@ import { Plus, LogIn, UserPlus, BookOpen, ShieldCheck, MessageSquare } from "luc
 
 type AuthorMini = {
   id: string;
-  displayName: string;
+  displayName: string | null;
   avatarUrl: string | null;
   playCount: number;
 };
@@ -162,13 +162,13 @@ export function HomeSidebar({ loggedIn, userName, stats, authors = [] }: Props) 
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-sm font-medium text-pink-700">
-                        {a.displayName.slice(0, 1)}
+                        {(a.displayName ?? "?").slice(0, 1)}
                       </div>
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-gray-900">
-                      {a.displayName}
+                      {a.displayName ?? "名無し"}
                     </p>
                     <p className="text-[10px] text-gray-500">
                       {a.playCount} 作品
