@@ -450,8 +450,9 @@ export async function GET(
     });
   } catch (error) {
     console.error("Certificate PDF generation error:", error);
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     return NextResponse.json(
-      { error: "許可証PDFの生成に失敗しました。" },
+      { error: "許可証PDFの生成に失敗しました。", detail },
       { status: 500 }
     );
   }
