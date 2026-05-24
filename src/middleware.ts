@@ -16,6 +16,8 @@ const securityHeaders: Record<string, string> = {
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: blob: https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com https://lh3.googleusercontent.com; " +
     "connect-src 'self' https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com; " +
+    "frame-src 'self' https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com; " +
+    "worker-src 'self' blob:; " +
     "font-src 'self' https://fonts.gstatic.com;",
 };
 
