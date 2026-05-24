@@ -11,9 +11,7 @@ export default function ThreadsPage() {
           メッセージ機能は現在準備中です
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-gray-500">
-          電気通信事業届出の承認待ちのため、メッセージ機能は一時的にご利用いただけません。
-          <br />
-          承認完了次第、ご利用いただけるようになります。
+          メッセージ機能は現在実装中です。今しばらくお待ちください。
         </p>
       </div>
     </div>

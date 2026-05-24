@@ -87,7 +87,7 @@ export default async function HomePage({
     <div>
       {/* ===== Beta Notice Banner ===== */}
       <div className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm text-amber-800">
-        本サービスはベータ版です。予告なくサービスを終了する場合があります。メッセージ機能は電気通信事業届出の承認待ちのため、現在ご利用いただけません。
+        本サービスはベータ版です。予告なくサービスを終了する場合があります。
       </div>
 
       {/* ===== 3-Column Top Section ===== */}
@@ -132,7 +132,7 @@ export default async function HomePage({
                 loggedIn={loggedIn}
                 userName={userName}
                 stats={stats}
-                authors={featuredAuthors.slice(0, 4).map((a: any) => ({
+                authors={featuredAuthors.slice(0, 4).map((a) => ({
                   id: a.id,
                   displayName: a.displayName,
                   avatarUrl: a.avatarUrl,
@@ -208,7 +208,7 @@ export default async function HomePage({
                   synopsis={play.synopsis}
                   durationMinutes={play.durationMinutes}
                   castTotal={play.castTotal}
-                  genres={play.genres.map((pg: any) => ({
+                  genres={play.genres.map((pg) => ({
                     name: pg.genre.name,
                   }))}
                   isFree={play.isFree}
@@ -261,7 +261,7 @@ export default async function HomePage({
                     synopsis={play.synopsis}
                     durationMinutes={play.durationMinutes}
                     castTotal={play.castTotal}
-                    genres={play.genres.map((pg: any) => ({
+                    genres={play.genres.map((pg) => ({
                       name: pg.genre.name,
                     }))}
                     isFree={play.isFree}

@@ -40,6 +40,9 @@ export function Footer() {
               <li>
                 <Link href="/privacy" className="text-gray-400 hover:text-gray-300 transition-colors">プライバシーポリシー</Link>
               </li>
+              <li>
+                <Link href="/legal" className="text-gray-400 hover:text-gray-300 transition-colors">特定商取引法に基づく表記</Link>
+              </li>
             </ul>
           </div>
 
@@ -61,9 +64,12 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 mt-8 pt-6 flex justify-between items-center">
+        <div className="border-t border-gray-800 mt-8 pt-6 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
           <p className="text-sm text-gray-500">
             &copy; {new Date().getFullYear()} 戯曲パレット
+          </p>
+          <p className="text-xs text-gray-500">
+            電気通信事業届出番号: A-08-23628（令和8年5月18日届出）
           </p>
         </div>
       </div>
