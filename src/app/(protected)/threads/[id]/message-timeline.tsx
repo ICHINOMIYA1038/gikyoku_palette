@@ -279,6 +279,10 @@ function SystemCard({ message }: { message: ThreadMessage }) {
   const style = SYSTEM_STYLES[kind] ?? SYSTEM_STYLES.permission_submitted;
   const Icon = style.icon;
   const detail = formatSystemDetail(message);
+  const meta = (message.metadata as Record<string, unknown> | null) ?? null;
+  const payoutBankInfo =
+    typeof meta?.payoutBankInfo === "string" ? meta.payoutBankInfo : null;
+  const feeAmount = typeof meta?.feeAmount === "number" ? meta.feeAmount : null;
 
   if (style.strong) {
     // 重要イベント: 横幅広めに、塗りで主張
@@ -295,6 +299,9 @@ function SystemCard({ message }: { message: ThreadMessage }) {
           <div className="min-w-0 flex-1">
             <p className={`font-medium ${style.color}`}>{message.content}</p>
             {detail && <p className="mt-0.5 text-xs text-gray-600">{detail}</p>}
+            {payoutBankInfo && (
+              <PayoutBankBlock content={payoutBankInfo} feeAmount={feeAmount} />
+            )}
             <p className="mt-1.5 text-[10px] text-gray-400">
               {formatTime(message.createdAt)}
             </p>
@@ -318,11 +325,40 @@ function SystemCard({ message }: { message: ThreadMessage }) {
         <div className="min-w-0">
           <p className="font-medium text-gray-800">{message.content}</p>
           {detail && <p className="mt-0.5 text-gray-600">{detail}</p>}
+          {payoutBankInfo && (
+            <PayoutBankBlock content={payoutBankInfo} feeAmount={feeAmount} />
+          )}
           <p className="mt-1 text-[10px] text-gray-400">
             {formatTime(message.createdAt)}
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PayoutBankBlock({
+  content,
+  feeAmount,
+}: {
+  content: string;
+  feeAmount: number | null;
+}) {
+  return (
+    <div className="mt-2 rounded-md border border-gray-200 bg-white p-2.5">
+      <div className="mb-1 flex items-baseline justify-between">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-gray-500">
+          振込先
+        </span>
+        {feeAmount != null && feeAmount > 0 && (
+          <span className="text-[11px] font-medium text-gray-700">
+            ¥{feeAmount.toLocaleString()}
+          </span>
+        )}
+      </div>
+      <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-gray-700">
+        {content}
+      </pre>
     </div>
   );
 }

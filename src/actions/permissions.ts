@@ -233,7 +233,12 @@ export async function approvePermission(
       threadId: permission.thread!.id,
       kind: "permission_approved",
       content: isFree ? "上演が許可されました" : "申請が承認されました。振込先が提示されました。",
-      metadata: { permissionNumber, feeAmount: permission.feeAmount },
+      metadata: {
+        permissionNumber,
+        feeAmount: permission.feeAmount,
+        // 振込先情報をスレッドに残し、後から振り返れるようにする
+        payoutBankInfo: trimmedPayout,
+      },
       createdAt: now,
     });
 
