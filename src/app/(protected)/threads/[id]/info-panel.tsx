@@ -106,20 +106,14 @@ export function InfoPanel({ detail }: { detail: ThreadDetail }) {
               <p className="mt-0.5 font-mono text-sm font-medium text-gray-900">
                 {permission.permissionNumber}
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 w-full gap-1.5"
-                render={
-                  <a
-                    href={`/api/permissions/${permission.id}/certificate`}
-                    download
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    許可証をダウンロード
-                  </a>
-                }
-              />
+              <a
+                href={`/api/permissions/${permission.id}/certificate`}
+                download={`permission-${permission.permissionNumber ?? "certificate"}.pdf`}
+                className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-[12px] border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                <Download className="h-3.5 w-3.5" />
+                許可証をダウンロード
+              </a>
             </div>
           </div>
         </div>
