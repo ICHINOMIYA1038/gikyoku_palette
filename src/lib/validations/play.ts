@@ -32,6 +32,7 @@ export const playSchema = z.object({
   castOther: z.coerce.number().int().min(0).optional(),
   feeAmount: z.coerce.number().int().min(0),
   isFree: z.coerce.boolean(),
+  acceptsPermissions: z.coerce.boolean().default(true),
   coverImageUrl: uploadedUrl.optional().or(z.literal("")),
   seriesId: z.string().optional(),
   seriesOrder: z.coerce.number().int().positive().optional(),
@@ -69,6 +70,11 @@ export function readPlayInput(formData: FormData) {
     castOther: opt("castOther"),
     feeAmount: opt("feeAmount") || "0",
     isFree: formData.get("isFree") === "true",
+    // 値が無い場合（チェックボックス未送信）はデフォルト true 扱い
+    acceptsPermissions: formData.has("acceptsPermissions")
+      ? formData.get("acceptsPermissions") === "true" ||
+        formData.get("acceptsPermissions") === "on"
+      : true,
     coverImageUrl: opt("coverImageUrl"),
     seriesId: opt("seriesId"),
     seriesOrder: opt("seriesOrder"),

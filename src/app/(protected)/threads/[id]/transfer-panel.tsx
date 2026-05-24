@@ -94,7 +94,7 @@ export function TransferPanel({
               <button
                 type="button"
                 onClick={handleCopy}
-                className="mt-2 inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700"
+                className="mt-2 inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-700"
               >
                 {copied ? (
                   <>
@@ -111,7 +111,7 @@ export function TransferPanel({
           {error && <p className="text-xs text-red-500">{error}</p>}
           <Button
             size="sm"
-            className="w-full gap-1.5"
+            className="h-11 w-full gap-1.5 sm:h-9"
             onClick={handleReport}
             disabled={loading}
           >
@@ -160,7 +160,7 @@ export function TransferPanel({
           <Button
             size="sm"
             variant="outline"
-            className="mt-2 w-full gap-1.5"
+            className="mt-2 h-11 w-full gap-1.5 sm:h-9"
             onClick={handleConfirm}
             disabled={loading}
           >
@@ -191,7 +191,7 @@ export function TransferPanel({
       {error && <p className="text-xs text-red-500">{error}</p>}
       <Button
         size="sm"
-        className="w-full gap-1.5"
+        className="h-11 w-full gap-1.5 sm:h-9"
         onClick={handleConfirm}
         disabled={loading}
       >

@@ -167,12 +167,21 @@ export default async function PlayDetailPage({ params }: Props) {
                   />
                 </div>
                 <DownloadButton playId={play.id} title={play.title} hasBody={!!play.body || !!play.bodyPdfUrl} bodyType={play.bodyType || "text"} bodyPdfUrl={play.bodyPdfUrl} />
-                <Link
-                  href={`/permissions/new/${play.id}`}
-                  className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-pink-500 text-sm font-medium text-white transition-colors hover:bg-pink-600"
-                >
-                  上演許可を申請する
-                </Link>
+                {play.acceptsPermissions ? (
+                  <Link
+                    href={`/permissions/new/${play.id}`}
+                    className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-pink-500 text-sm font-medium text-white transition-colors hover:bg-pink-600"
+                  >
+                    上演許可を申請する
+                  </Link>
+                ) : (
+                  <div
+                    className="w-full inline-flex h-11 items-center justify-center rounded-lg bg-gray-100 text-sm font-medium text-gray-500"
+                    title="この作品は現在、上演許可申請を受け付けていません"
+                  >
+                    現在受付停止中
+                  </div>
+                )}
               </div>
 
               {/* Metadata */}

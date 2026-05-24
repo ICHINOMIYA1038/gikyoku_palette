@@ -128,13 +128,14 @@ export function AuthorActions({ permission, onActed }: Props) {
 
   if (mode === "idle") {
     return (
-      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-        <p className="mr-auto text-sm text-amber-800">
+      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <p className="mb-2 text-sm text-amber-800 sm:mb-0">
           {permission.status === "pending"
             ? "この申請は審査待ちです。"
             : "修正版の再審査をお願いします。"}
         </p>
-        <Button type="button" size="sm" className="gap-1.5" onClick={() => setMode("approve")}>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:mt-0 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+        <Button type="button" size="sm" className="h-10 w-full gap-1.5 sm:w-auto" onClick={() => setMode("approve")}>
           <Check className="h-3.5 w-3.5" />
           承認
         </Button>
@@ -143,7 +144,7 @@ export function AuthorActions({ permission, onActed }: Props) {
             type="button"
             size="sm"
             variant="outline"
-            className="gap-1.5 text-orange-600 hover:text-orange-700"
+            className="h-10 w-full gap-1.5 text-orange-600 hover:text-orange-700 sm:w-auto"
             onClick={() => setMode("revision")}
           >
             <AlertCircle className="h-3.5 w-3.5" />
@@ -154,12 +155,13 @@ export function AuthorActions({ permission, onActed }: Props) {
           type="button"
           size="sm"
           variant="outline"
-          className="gap-1.5 text-red-600 hover:text-red-700"
+          className="h-10 w-full gap-1.5 text-red-600 hover:text-red-700 sm:w-auto"
           onClick={() => setMode("reject")}
         >
           <X className="h-3.5 w-3.5" />
           却下
         </Button>
+        </div>
       </div>
     );
   }
@@ -279,14 +281,15 @@ export function AuthorActions({ permission, onActed }: Props) {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      <div className="flex gap-2">
-        <Button type="button" size="sm" disabled={submitting} onClick={handle}>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row">
+        <Button type="button" size="sm" className="h-10 sm:h-8" disabled={submitting} onClick={handle}>
           {submitting ? "処理中..." : submitLabel}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="ghost"
+          className="h-10 sm:h-8"
           disabled={submitting}
           onClick={reset}
         >

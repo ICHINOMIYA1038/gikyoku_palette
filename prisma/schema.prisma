@@ -38,6 +38,8 @@ model PalettePlay {
   feeAmount       Int       @default(0) @map("fee_amount")
   isFree          Boolean   @default(true) @map("is_free")
   isPublished     Boolean   @default(false) @map("is_published")
+  /// 上演許可申請を受け付けるか。false なら詳細ページの申請ボタンを抑止。
+  acceptsPermissions Boolean @default(true) @map("accepts_permissions")
   coverImageUrl   String?   @map("cover_image_url")
   viewCount       Int       @default(0) @map("view_count")
   downloadCount   Int       @default(0) @map("download_count")

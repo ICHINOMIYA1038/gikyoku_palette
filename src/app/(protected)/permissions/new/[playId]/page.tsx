@@ -17,10 +17,11 @@ export default async function NewPermissionPage({ params }: Props) {
       isPublished: true,
       isFree: true,
       feeAmount: true,
+      acceptsPermissions: true,
     },
   });
 
-  if (!play || !play.isPublished) notFound();
+  if (!play || !play.isPublished || !play.acceptsPermissions) notFound();
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">

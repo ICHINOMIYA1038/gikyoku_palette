@@ -131,7 +131,7 @@ export function ThreadView({ initial }: { initial: ThreadDetail }) {
                   <span aria-hidden className="text-gray-400">▾</span>
                 </span>
               </summary>
-              <div className="border-t border-gray-100 p-2">
+              <div className="border-t border-gray-100">
                 <InfoPanel detail={detail} />
               </div>
             </details>

@@ -137,6 +137,24 @@ export function PlayEditForm({
             </div>
           </div>
 
+          <div className="space-y-1.5 rounded-md border border-gray-200 bg-gray-50/50 p-3">
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="acceptsPermissions"
+                value="true"
+                defaultChecked={play.acceptsPermissions ?? true}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span>
+                <span className="font-medium text-gray-900">上演許可申請を受け付ける</span>
+                <span className="mt-0.5 block text-[11px] text-gray-500">
+                  オフにすると詳細ページに「現在受付停止中」と表示され、申請ボタンが無効化されます。
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div className="space-y-2">
             <Label>ジャンル（最大5つ）</Label>
             <GenreSelector

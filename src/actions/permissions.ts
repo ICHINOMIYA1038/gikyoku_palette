@@ -64,6 +64,9 @@ export async function createPermission(playId: string, formData: FormData) {
   if (!play || !play.isPublished) {
     return { error: "作品が見つかりません" };
   }
+  if (!play.acceptsPermissions) {
+    return { error: "この作品は現在、上演許可申請を受け付けていません" };
+  }
 
   // 同一ユーザーが同一作品で in-flight 申請を持っている場合は防ぐ（UX配慮）
   const active = await prisma.palettePermission.findFirst({
