@@ -188,10 +188,10 @@ export function HomeSidebar({ loggedIn, userName, stats, authors = [] }: Props) 
         className="block cursor-pointer transition-opacity hover:opacity-90"
       >
         <Image
-          src="/banners/tosyokan-rect.png"
+          src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/banners/tosyokan-rect.png"
           alt="戯曲図書館"
-          width={1024}
-          height={1024}
+          width={300}
+          height={250}
           className="h-auto w-full rounded-lg"
         />
       </a>

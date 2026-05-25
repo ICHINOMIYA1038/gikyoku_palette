@@ -26,13 +26,21 @@ async function shot(
   page: Page,
   filename: string,
   selector: string,
-  opts: { padding?: number; maxHeight?: number } = {}
+  opts: { padding?: number } = {}
 ) {
   const el = await page.waitForSelector(selector, { timeout: 15_000 });
-  await el.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(300);
-  // 要素単体をキャプチャ (clipの座標問題を回避)
-  await el.screenshot({ path: path.join(OUT, filename) });
+  const box = await el.boundingBox();
+  if (!box) throw new Error(`no bounding box for ${selector}`);
+  const pad = opts.padding ?? 12;
+  await page.screenshot({
+    path: path.join(OUT, filename),
+    clip: {
+      x: Math.max(0, box.x - pad),
+      y: Math.max(0, box.y - pad),
+      width: box.width + pad * 2,
+      height: box.height + pad * 2,
+    },
+  });
   console.log(`✓ ${filename}`);
 }
 
@@ -42,10 +50,8 @@ async function main() {
 
   const context = await chromium.launchPersistentContext(AUTH_DIR, {
     headless: false,
-    channel: "chrome", // Google OAuth が Playwright Chromium を弾くため実 Chrome を使う
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2, // Retina 相当
-    args: ["--disable-blink-features=AutomationControlled"],
   });
   const page = await context.newPage();
 
@@ -53,35 +59,27 @@ async function main() {
   await page.goto(`${BASE}/dashboard`);
   if (page.url().includes("/login")) {
     console.log("⚠ 未ログインです。表示されたウィンドウで Google ログインを完了してください。");
-    console.log("  完了したら 5 分以内に dashboard へ自動遷移します…");
-    await page.waitForURL(/\/dashboard/, { timeout: 300_000 });
+    console.log("  完了したら 60 秒以内に dashboard へ自動遷移します…");
+    await page.waitForURL(/\/dashboard/, { timeout: 60_000 });
     console.log("✓ ログイン完了");
   }
 
-  // 1. ホーム（人気の作品セクション）
+  // 2. ホーム（人気の作品セクション）
   await page.goto(BASE);
-  await page.waitForLoadState("networkidle");
-  // "人気の作品" を含む panel を撮影
-  await shot(page, "1-search.png", 'div:has(> div > h2:text("人気の作品")), div:has(> h2:text("人気の作品"))').catch(async () => {
-    // フォールバック: ニュース横の中央カラム全体
-    await shot(page, "1-search.png", "main");
-  });
+  await shot(page, "1-search.png", "section:has(.container) >> nth=1");
 
-  // 2. 上演許可申請フォーム
+  // 3. 上演許可申請フォーム — 最初に見つかった公開作品で
+  await page.goto(`${BASE}/`);
   const playLink = await page.$('a[href^="/plays/"]');
-  if (!playLink) {
-    console.log("⚠ 公開作品が無いので #2/#3 撮影不可");
-  } else {
-    const playHref = await playLink.getAttribute("href");
-    const playId = playHref!.split("/").pop()!;
-    await page.goto(`${BASE}/permissions/new/${playId}`);
-    await page.waitForLoadState("networkidle");
-    await shot(page, "2-apply.png", "form");
-  }
+  if (!playLink) throw new Error("公開作品が無いので #2/#3 撮影不可");
+  const playHref = await playLink.getAttribute("href");
+  const playId = playHref!.split("/").pop()!;
 
-  // 3. スレッド
+  await page.goto(`${BASE}/permissions/new/${playId}`);
+  await shot(page, "2-apply.png", "form");
+
+  // 4. スレッド — 進行中スレッド一覧から1つ
   await page.goto(`${BASE}/threads`);
-  await page.waitForLoadState("networkidle");
   const thread = await page.$('a[href^="/threads/"]');
   if (!thread) {
     console.log("⚠ スレッドが無いので #3/#4 はスキップ");
@@ -90,20 +88,15 @@ async function main() {
   }
   const threadHref = await thread.getAttribute("href");
   await page.goto(`${BASE}${threadHref}`);
-  await page.waitForLoadState("networkidle");
 
-  // 振込先パネル or 許可証発行カード
-  for (const [text, file] of [
-    ["お振込み", "3-transfer.png"],
-    ["許可証発行済み", "4-certificate.png"],
-  ] as const) {
-    const sel = `div:has(> p:text("${text}"))`;
-    const el = await page.$(sel);
-    if (el) {
-      await shot(page, file, sel).catch((e) => console.log(`× ${file}: ${e.message}`));
-    } else {
-      console.log(`⚠ "${text}" 要素が見つからないので ${file} スキップ`);
-    }
+  // 振込先 (TransferPanel) or 許可証 (info-panel 内) のどちらかを撮影
+  const transfer = await page.$('div:has(> p:text("お振込み"))');
+  if (transfer) {
+    await shot(page, "3-transfer.png", 'div:has(> p:text("お振込み"))');
+  }
+  const cert = await page.$('div:has(> div > p:text("許可証発行済み"))');
+  if (cert) {
+    await shot(page, "4-certificate.png", 'div:has(> div > p:text("許可証発行済み"))');
   }
 
   await context.close();
