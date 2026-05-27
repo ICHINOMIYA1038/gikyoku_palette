@@ -395,7 +395,15 @@ export function drawScript(
     const isActive = cursor?.blockIndex === col.blockIndex;
 
     // アクティブ列ハイライト
-    if (isActive) {
+    // title/author は同じブロック内に2列あるので、編集中フィールドの列だけハイライト
+    // castChar も列単位で個別ハイライト
+    const highlightCol = isActive && (
+      (col.special === "title" && cursor?.field === "title") ||
+      (col.special === "author" && cursor?.field === "author") ||
+      (col.special === "castChar" && cursor?.castIndex === col.startCharIndex) ||
+      (col.special !== "title" && col.special !== "author" && col.special !== "castChar" && col.special !== "castLabel")
+    );
+    if (highlightCol) {
       ctx.fillStyle = "rgba(59,130,246,0.05)";
       ctx.fillRect(col.x - COL_W / 2, M_TOP + HEADER_H, COL_W, PAGE_H - M_TOP - HEADER_H - M_BOTTOM);
     }
@@ -407,9 +415,9 @@ export function drawScript(
       const lineH = fs + 8;
       const TITLE_TOP = M_TOP + HEADER_H + 24;
       const titleComposing = isActive && cursor?.field === "title" && composingText.length > 0;
-      if (col.chars.length === 0 && isActive && !titleComposing) {
+      if (col.chars.length === 0 && isActive && cursor?.field === "title" && !titleComposing) {
         ctx.font = fontStr(fs * 0.6, cfg);
-        ctx.fillStyle = "#ccc";
+        ctx.fillStyle = "#d4d4d8";
         const ph = "タイトル";
         for (let i = 0; i < ph.length; i++) {
           const cw = ctx.measureText(ph[i]).width;
@@ -443,8 +451,8 @@ export function drawScript(
       ctx.fillStyle = "#555";
       const offsetY = BODY_H * 0.45;
       const authorComposing = isActive && cursor?.field === "author" && composingText.length > 0;
-      if (col.chars.length === 0 && isActive && !authorComposing) {
-        ctx.fillStyle = "#ccc";
+      if (col.chars.length === 0 && isActive && cursor?.field === "author" && !authorComposing) {
+        ctx.fillStyle = "#d4d4d8";
         const ph = "作者名";
         for (let i = 0; i < ph.length; i++) {
           const cw = ctx.measureText(ph[i]).width;
@@ -478,8 +486,8 @@ export function drawScript(
       const isCharActive = col.special === "castChar" && isActive && cursor?.castIndex === col.startCharIndex;
       const composingHere = isCharActive && composingText.length > 0;
 
-      if (col.special === "castChar" && col.chars.length === 0 && !composingHere) {
-        ctx.fillStyle = "#ccc";
+      if (col.special === "castChar" && col.chars.length === 0 && isCharActive && !composingHere) {
+        ctx.fillStyle = "#d4d4d8";
         const ph = "人物名";
         for (let i = 0; i < ph.length; i++) {
           drawVerticalChar(ctx, ph[i], col.x, BODY_TOP + i * lineH, lineH, fs);
@@ -628,13 +636,13 @@ export function drawScript(
       const placeholders: Record<string, string> = {
         serif: "セリフ",
         togaki: "ト書き",
-        sceneHeading: "場面",
+        sceneHeading: "第1幕",
         endMark: "おわり",
       };
       const ph = placeholders[block.type] || "";
       if (ph) {
         ctx.font = fontStr(fs * 0.75, cfg);
-        ctx.fillStyle = "#ccc";
+        ctx.fillStyle = "#d4d4d8";
         for (let i = 0; i < ph.length; i++) {
           const cw = ctx.measureText(ph[i]).width;
           ctx.fillText(ph[i], col.x - fs / 2 + (fs - cw) / 2, BODY_TOP + indent + i * (fs * 0.75 + 3));
@@ -781,11 +789,6 @@ export function hitTestScript(
     const spTop = spBottom - speaker.length * spCharH;
     const idx = Math.min(Math.floor((my - spTop) / spCharH), speaker.length);
     return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: Math.max(0, idx) };
-  }
-
-  // セリフブロックでspeakerが空なら、本文エリアクリックでもspeakerに移動
-  if (block.type === "serif" && !block.speaker) {
-    return { blockIndex: bestCol.blockIndex, field: "speaker", charIndex: 0 };
   }
 
   // ト書きはインデントとフォントサイズが異なる

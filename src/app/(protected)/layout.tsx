@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
@@ -34,6 +35,9 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const pathname = usePathname();
+  // 集中して入力するフォーム系ページではモバイル下部ナビを隠す
+  const hideMobileNav = /^\/dashboard\/(plays|series)\/(new|.+\/edit)/.test(pathname);
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-6">
@@ -84,7 +88,7 @@ export default function ProtectedLayout({
         </nav>
 
         {/* モバイルナビ (md未満) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white">
+        <nav className={`${hideMobileNav ? "hidden" : "md:hidden"} fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white`}>
           {moreOpen && (
             <div className="border-t border-gray-100 bg-white px-4 py-3 space-y-3">
               <div>

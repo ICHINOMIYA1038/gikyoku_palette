@@ -115,7 +115,7 @@ export function BodyTypeSelector({
           <button
             type="button"
             onClick={() => setBodyType("editor")}
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`hidden md:inline-block rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               bodyType === "editor" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
@@ -137,7 +137,7 @@ export function BodyTypeSelector({
           defaultValue={initialBody}
           rows={20}
           placeholder="本文をここに入力してください"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-400 transition-colors font-mono"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-400 transition-colors font-mono"
         />
       )}
 

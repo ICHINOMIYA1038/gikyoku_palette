@@ -1,6 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function Footer() {
+  const pathname = usePathname();
+  // 集中入力するフォーム/エディタ系ページではフッターを隠す
+  if (/^\/dashboard\/(plays|series)\/(new|.+\/edit)/.test(pathname) || pathname.startsWith("/editor/")) {
+    return null;
+  }
   return (
     <footer className="border-t border-gray-200 bg-gray-900 text-gray-400 pt-12 pb-8">
       <div className="container mx-auto max-w-6xl px-4">

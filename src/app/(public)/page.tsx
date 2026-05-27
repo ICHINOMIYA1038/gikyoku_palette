@@ -324,8 +324,8 @@ export default async function HomePage({
         </div>
       </section>
 
-      {/* ===== 戯曲図書館バナー ===== */}
-      <section className="py-8 md:py-10">
+      {/* ===== 戯曲図書館バナー (モバイルでは非表示) ===== */}
+      <section className="hidden md:block py-8 md:py-10">
         <div className="container mx-auto px-4 max-w-5xl">
           <a
             href="https://gikyokutosyokan.com"

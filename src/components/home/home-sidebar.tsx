@@ -180,12 +180,12 @@ export function HomeSidebar({ loggedIn, userName, stats, authors = [] }: Props) 
           </ul>
         </section>
       )}
-      {/* 戯曲図書館バナー */}
+      {/* 戯曲図書館バナー (モバイルでは非表示) */}
       <a
         href="https://gikyokutosyokan.com"
         target="_blank"
         rel="noopener noreferrer"
-        className="block cursor-pointer transition-opacity hover:opacity-90"
+        className="hidden lg:block cursor-pointer transition-opacity hover:opacity-90"
       >
         <Image
           src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/banners/tosyokan-rect.png"

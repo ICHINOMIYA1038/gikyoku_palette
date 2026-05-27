@@ -4,6 +4,8 @@ import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { NotificationBell } from "./notification-bell";
 import { UserMenu } from "./user-menu";
+import { MobileMenu } from "./mobile-menu";
+import { Plus } from "lucide-react";
 
 export async function Header() {
   const session = await auth();
@@ -23,13 +25,14 @@ export async function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-sm">
-      <div className="container mx-auto flex h-24 max-w-5xl items-center justify-between px-4">
-        <div className="flex items-center gap-8">
+      <div className="container mx-auto flex h-16 max-w-5xl items-center justify-between gap-2 px-4 md:h-24">
+        <div className="flex items-center gap-2 md:gap-8">
+          <MobileMenu />
           <Link
             href="/"
             className="flex items-center gap-2 font-serif text-lg font-bold text-gray-900"
           >
-            <Image src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/logo-palette.png" alt="戯曲パレット" width={400} height={80} className="h-20 w-auto" priority />
+            <Image src="https://gikyokutosyokan-public.s3.ap-northeast-1.amazonaws.com/assets/logo-palette.png" alt="戯曲パレット" width={400} height={80} className="h-10 w-auto md:h-20" priority />
           </Link>
           <nav className="hidden items-center gap-6 text-sm md:flex">
             <Link
@@ -66,13 +69,15 @@ export async function Header() {
               />
               <Link
                 href="/dashboard/plays/new"
-                className="inline-flex h-8 items-center justify-center rounded-md bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+                aria-label="投稿する"
+                className="inline-flex h-9 w-9 md:h-8 md:w-auto items-center justify-center rounded-md bg-gray-900 md:px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800"
               >
-                投稿する
+                <Plus className="h-4 w-4 md:hidden" />
+                <span className="hidden md:inline">投稿する</span>
               </Link>
             </div>
           ) : (
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-2 md:gap-3 text-sm">
               <Link
                 href="/login"
                 className="text-gray-500 transition-colors hover:text-gray-900"
@@ -81,9 +86,9 @@ export async function Header() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-8 items-center justify-center rounded-md bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+                className="inline-flex h-9 md:h-8 items-center justify-center rounded-md bg-gray-900 px-3 md:px-4 text-sm font-medium text-white transition-colors hover:bg-gray-800"
               >
-                投稿する
+                投稿
               </Link>
             </div>
           )}

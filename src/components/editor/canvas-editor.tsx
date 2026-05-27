@@ -812,10 +812,47 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         return;
       }
 
-      // Tab: セリフ ↔ ト書き を切替
-      if (e.key === "Tab" && (block.type === "serif" || block.type === "togaki")) {
+      // Shift+Tab : セリフ ↔ ト書き を切替
+      if (e.key === "Tab" && e.shiftKey && (block.type === "serif" || block.type === "togaki")) {
         e.preventDefault();
         changeBlockType(blockIndex, block.type === "serif" ? "togaki" : "serif");
+        return;
+      }
+
+      // Tab: 次のフィールド/ブロックへ移動
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        // title: title → author
+        if (block.type === "title" && field === "title") {
+          setCursor({ blockIndex, field: "author", charIndex: 0 });
+          return;
+        }
+        // serif: speaker → speech
+        if (block.type === "serif" && field === "speaker") {
+          setCursor({ blockIndex, field: "speech", charIndex: 0 });
+          return;
+        }
+        // castList: 次の人物
+        if (block.type === "castList") {
+          const idx = cursor.castIndex ?? 0;
+          if (idx < block.characters.length - 1) {
+            setCursor({ ...cursor, castIndex: idx + 1, charIndex: 0 });
+            return;
+          }
+        }
+        // 次のブロックの先頭へ
+        const targetIdx = blockIndex + 1;
+        const nb = doc.blocks[targetIdx];
+        if (!nb) return;
+        const nField: CursorPosition["field"] =
+          nb.type === "serif" ? "speaker"
+          : nb.type === "title" ? "title"
+          : "text";
+        const nextCursor: CursorPosition = { blockIndex: targetIdx, field: nField, charIndex: 0 };
+        if (nb.type === "castList") {
+          nextCursor.castIndex = 0;
+        }
+        setCursor(nextCursor);
         return;
       }
 
@@ -848,6 +885,16 @@ export function CanvasEditor({ playId, initialContent }: Props) {
             });
             const prevName = block.characters[idx - 1]?.name || "";
             setCursor({ ...cursor, castIndex: idx - 1, charIndex: prevName.length });
+          } else if (charIndex === 0 && idx === 0 && name === "" && doc.blocks.length > 1) {
+            // すべての人物が空 → 登場人物ブロックごと削除
+            const allEmpty = block.characters.every((c) => (c.name || "") === "");
+            if (allEmpty) {
+              updateDoc((d) => ({ ...d, blocks: d.blocks.filter((_, i) => i !== blockIndex) }));
+              const pi = Math.max(0, blockIndex - 1);
+              const pb = doc.blocks[pi];
+              const pf: CursorPosition["field"] = pb?.type === "serif" ? "speech" : pb?.type === "title" ? "title" : "text";
+              setCursor({ blockIndex: pi, field: pf, charIndex: getFieldText({ blockIndex: pi, field: pf, charIndex: 0 }).length });
+            }
           }
           return;
         }
@@ -887,6 +934,17 @@ export function CanvasEditor({ playId, initialContent }: Props) {
           const pi = Math.max(0, blockIndex - 1);
           const pb = doc.blocks[pi];
           const pf = pb?.type === "serif" ? "speech" : pb?.type === "title" ? "title" : "text";
+          setCursor({ blockIndex: pi, field: pf, charIndex: getFieldText({ blockIndex: pi, field: pf, charIndex: 0 }).length });
+        } else if (
+          (block.type === "sceneHeading" || block.type === "endMark" || block.type === "togaki") &&
+          text === "" &&
+          doc.blocks.length > 1
+        ) {
+          // 空の場面/終幕/ト書きブロックを削除
+          updateDoc((d) => ({ ...d, blocks: d.blocks.filter((_, i) => i !== blockIndex) }));
+          const pi = Math.max(0, blockIndex - 1);
+          const pb = doc.blocks[pi];
+          const pf: CursorPosition["field"] = pb?.type === "serif" ? "speech" : pb?.type === "title" ? "title" : "text";
           setCursor({ blockIndex: pi, field: pf, charIndex: getFieldText({ blockIndex: pi, field: pf, charIndex: 0 }).length });
         }
         return;
@@ -992,7 +1050,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
 
         <ToolBtn label="タイトル" onClick={() => insertBlock({ type: "title", title: "", author: "" })} />
         <ToolBtn label="登場人物" onClick={() => insertBlock({ type: "castList", characters: [] })} />
-        <ToolBtn label="場面" onClick={() => insertBlock({ type: "sceneHeading", text: "" })} />
+        <ToolBtn label="シーン" onClick={() => insertBlock({ type: "sceneHeading", text: "" })} />
         <ToolBtn label="セリフ" shortcut="Enter" onClick={() => insertBlock({ type: "serif", speaker: "", speech: "" })} />
         <ToolBtn label="ト書き" onClick={() => insertBlock({ type: "togaki", text: "" })} />
         <ToolBtn label="終幕" onClick={() => insertBlock({ type: "endMark", text: "おわり" })} />
@@ -1105,7 +1163,12 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         castNames.length > 0 && (
           <div
             className="fixed z-40 flex flex-col gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
-            style={{ left: inputPos.left + 20, top: inputPos.top + 24, minWidth: 120 }}
+            style={{
+              left: inputPos.left - 20,
+              top: Math.max(8, inputPos.top - 120),
+              minWidth: 120,
+              transform: "translateX(-100%)",
+            }}
           >
             <p className="px-2 pb-0.5 text-[10px] uppercase tracking-wider text-gray-400">話者を選択</p>
             {castNames.map((name, idx) => (
@@ -1135,10 +1198,23 @@ export function CanvasEditor({ playId, initialContent }: Props) {
         )}
 
       {/* ブロック種別ピッカー（Enter直後にカーソル近くに表示） */}
-      {blockPicker && inputPos && (
+      {blockPicker && inputPos && (() => {
+        // 話者ピッカー表示中はその上に積む
+        const speakerPickerShown =
+          doc.blocks[cursor.blockIndex]?.type === "serif" &&
+          cursor.field === "speaker" &&
+          ((doc.blocks[cursor.blockIndex] as any).speaker || "").length === 0 &&
+          castNames.length > 0;
+        const baseTop = inputPos.top - 120;
+        const top = Math.max(8, speakerPickerShown ? baseTop - 220 : baseTop);
+        return (
         <div
-          className="fixed z-40 flex gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
-          style={{ left: inputPos.left + 20, top: inputPos.top - 8 }}
+          className="fixed z-40 flex gap-1 rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg"
+          style={{
+            left: inputPos.left - 20,
+            top,
+            transform: "translateX(-100%)",
+          }}
         >
           {([
             { type: "serif", label: "セリフ" },
@@ -1160,9 +1236,10 @@ export function CanvasEditor({ playId, initialContent }: Props) {
               {t.label}
             </button>
           ))}
-          <span className="ml-1 mr-1 self-center text-[10px] text-gray-400">Tab</span>
+          <span className="ml-1 mr-1 self-center text-[10px] text-gray-400 whitespace-nowrap">Shift + Tab</span>
         </div>
-      )}
+        );
+      })()}
 
       {/* Canvas + Side Panel */}
       <div className="flex flex-1 overflow-hidden">
@@ -1250,7 +1327,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
                   <Divider />
                   <MenuItem label="下にセリフを追加" onClick={() => insertAfter({ type: "serif", speaker: "", speech: "" })} />
                   <MenuItem label="下にト書きを追加" onClick={() => insertAfter({ type: "togaki", text: "" })} />
-                  <MenuItem label="下に場面を追加" onClick={() => insertAfter({ type: "sceneHeading", text: "" })} />
+                  <MenuItem label="下にシーンを追加" onClick={() => insertAfter({ type: "sceneHeading", text: "" })} />
                   <MenuItem label="下にタイトルを追加" onClick={() => insertAfter({ type: "title", title: "", author: "" })} />
                   <MenuItem label="下に登場人物を追加" onClick={() => insertAfter({ type: "castList", characters: [] })} />
                   <Divider />
@@ -1259,7 +1336,7 @@ export function CanvasEditor({ playId, initialContent }: Props) {
                       <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-400">種別変更</div>
                       {curType !== "serif" && <MenuItem label="→ セリフ" onClick={() => changeTo("serif")} />}
                       {curType !== "togaki" && <MenuItem label="→ ト書き" onClick={() => changeTo("togaki")} />}
-                      {curType !== "sceneHeading" && <MenuItem label="→ 場面" onClick={() => changeTo("sceneHeading")} />}
+                      {curType !== "sceneHeading" && <MenuItem label="→ シーン" onClick={() => changeTo("sceneHeading")} />}
                       {curType !== "endMark" && <MenuItem label="→ 終幕" onClick={() => changeTo("endMark")} />}
                       <Divider />
                     </>
