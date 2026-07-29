@@ -267,17 +267,12 @@ export default async function PlayDetailPage({ params }: Props) {
               orientation={play.bodyOrientation as "portrait" | "landscape"}
               readingDirection={(play.readingDirection as "ltr" | "rtl") || "ltr"}
             />
-          ) : play.readingDirection === "rtl" && play.body ? (
-            // 縦書きテキストは native HTML で vertical-rl 表示
-            <PlayBody body={play.body} direction="rtl" />
-          ) : (
-            <PdfViewer
-              src={`/api/plays/${play.id}/pdf`}
-              title={play.title}
-              orientation={play.bodyOrientation as "portrait" | "landscape"}
-              readingDirection={(play.readingDirection as "ltr" | "rtl") || "ltr"}
+          ) : play.body ? (
+            <PlayBody
+              body={play.body}
+              direction={(play.readingDirection as "ltr" | "rtl") || "ltr"}
             />
-          )}
+          ) : null}
         </div>
       ) : null}
 

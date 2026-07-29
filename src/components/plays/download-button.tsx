@@ -91,15 +91,6 @@ export function DownloadButton({ playId, title, hasBody, bodyType, bodyPdfUrl }:
         <DownloadIcon />
         {isDownloading ? "ダウンロード中..." : "テキストDL"}
       </Button>
-      <a
-        href={`/api/plays/${playId}/pdf`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-      >
-        <PdfIcon />
-        PDFで見る
-      </a>
       <Link
         href={`/plays/${playId}/print`}
         className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
