@@ -19,7 +19,7 @@ export default async function LoginPage({
   const { redirectTo: to } = await searchParams;
   const redirectTo = to && to.startsWith("/") ? to : "/dashboard";
   // ログイン画面そのものは戯曲 ID のポータルにある。ここはその入口
-  const portalLogin = loginUrl(`${process.env.NEXT_PUBLIC_APP_URL ?? "https://palette.gikyokutosyokan.com"}${redirectTo}`);
+  const portalLogin = await loginUrl(redirectTo);
 
   // 既にログイン済みなら dashboard に飛ばす
   const session = await auth();

@@ -7,7 +7,7 @@
  * 設計は台帳 docs/gikyoku-id.md。
  */
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { prisma } from "@/lib/db";
@@ -63,14 +63,25 @@ export const auth = cache(async (): Promise<Session | null> => {
   return { user };
 });
 
-/** ログイン画面（ポータル）へ。戻り先はパレットの URL */
-export function loginUrl(returnTo: string): string {
-  return `${PORTAL_URL}/?return_to=${encodeURIComponent(returnTo)}`;
+/**
+ * このサイトの origin（https://palette.gikyokutosyokan.com）。リクエストの Host から決める。
+ * NEXT_PUBLIC_APP_URL はビルド時に埋め込まれるので、手元のビルドが本番に出ると localhost になってしまうため使わない
+ */
+export async function appOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "palette.gikyokutosyokan.com";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+/** ログイン画面（ポータル）へ。戻り先はこのサイトのパス（絶対 URL でもよい） */
+export async function loginUrl(returnTo: string): Promise<string> {
+  const absolute = returnTo.startsWith("/") ? `${await appOrigin()}${returnTo}` : returnTo;
+  return `${PORTAL_URL}/?return_to=${encodeURIComponent(absolute)}`;
 }
 
 /** ポータルのログアウト確認画面へ。全サービス・この端末のセッションが消える */
 export async function signOut({ redirectTo }: { redirectTo: string }): Promise<never> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://palette.gikyokutosyokan.com";
-  const absolute = redirectTo.startsWith("/") ? `${appUrl}${redirectTo}` : redirectTo;
+  const absolute = redirectTo.startsWith("/") ? `${await appOrigin()}${redirectTo}` : redirectTo;
   redirect(`${PORTAL_URL}/logout?return_to=${encodeURIComponent(absolute)}`);
 }
