@@ -1,4 +1,5 @@
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
 
 const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads", "/bookmarks", "/following", "/editor"];
@@ -27,6 +28,9 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   }
   return response;
 }
+
+// edge ランタイムで動くので、Prisma を含む @/lib/auth ではなく DB に触れない設定だけで JWT を読む
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const isProtected = protectedPaths.some((path) =>

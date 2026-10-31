@@ -58,6 +58,9 @@ const eslintConfig = defineConfig([
     ".worktrees/**",
     // ベンダ済み worker
     "public/pdf.worker.min.mjs",
+    // Cloudflare Workers のビルド成果物と wrangler の作業ファイル
+    ".open-next/**",
+    ".wrangler/**",
   ]),
 ]);
 

@@ -2,22 +2,18 @@
 // 執筆エディタからのエクスポートは jsPDF（src/lib/editor/export-pdf.ts）。
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { ensurePdfFonts } from "@/lib/pdf-fonts";
 import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
-  Font,
   renderToBuffer,
 } from "@react-pdf/renderer";
 import React from "react";
 
-// Register Japanese font (Noto Sans JP)
-Font.register({
-  family: "NotoSansJP",
-  src: "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.1/files/noto-sans-jp-japanese-400-normal.woff",
-});
+// 日本語フォントの登録は src/lib/pdf-fonts.ts（同梱フォント。以前は jsDelivr から毎回フェッチしていてタイムアウトしていた）
 
 const styles = StyleSheet.create({
   page: {
@@ -165,6 +161,7 @@ export async function GET(
   const authorName = authors[0]?.displayName ?? "不明";
 
   try {
+    await ensurePdfFonts();
     const pdfBuffer = await renderToBuffer(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       React.createElement(PlayPDF, { play, authorName }) as any

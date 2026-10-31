@@ -5,33 +5,15 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
   renderToBuffer,
 } from "@react-pdf/renderer";
 import React from "react";
-import fs from "node:fs";
-import path from "node:path";
+import { ensurePdfFonts } from "@/lib/pdf-fonts";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
 
-// 日本語フォント (通常/太字)。public/fonts に同梱したファイルを
-// モジュールロード時に Data URL に変換して Font.register に渡す。
-// jsDelivr 経由だと毎回フェッチで Vercel Lambda がタイムアウトしていた。
-// @react-pdf/renderer の `src` は URL / 絶対パス / Data URL を受け付け、
-// Buffer は受け付けないため Data URL 化が必須。
-const FONT_DIR = path.join(process.cwd(), "public/fonts/noto-sans-jp");
-function loadFontDataUrl(filename: string): string {
-  const buf = fs.readFileSync(path.join(FONT_DIR, filename));
-  return `data:font/woff;base64,${buf.toString("base64")}`;
-}
-Font.register({
-  family: "NotoSansJP",
-  fonts: [
-    { src: loadFontDataUrl("regular.woff"), fontWeight: "normal" },
-    { src: loadFontDataUrl("bold.woff"), fontWeight: "bold" },
-  ],
-});
+// 日本語フォントの登録は src/lib/pdf-fonts.ts（作品 PDF と共通）
 
 // Lambda タイムアウトを長めに（フォント embed + PDF render）。
 export const maxDuration = 60;
@@ -417,6 +399,7 @@ export async function GET(
   const authorName = await getUserDisplayName(permission.play.authorId);
 
   try {
+    await ensurePdfFonts();
     const pdfBuffer = await renderToBuffer(
       React.createElement(CertificatePDF, {
         permissionNumber: permission.permissionNumber || "—",

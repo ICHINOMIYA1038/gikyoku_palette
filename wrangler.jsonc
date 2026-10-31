@@ -1,0 +1,38 @@
+// Cloudflare Workers の設定（Next.js を OpenNext で動かす。Vercel から移行、2026-10-31）
+// 戯曲図書館（gikyoku-tosyokan）と同じ形。DB は同じ Supabase なので Hyperdrive も同じものを使う
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gikyoku-palette",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  // バージョンごとのプレビュー URL を使う（本番に出す前に確認するため）。workers.dev への常設公開はしない
+  "workers_dev": false,
+  "preview_urls": true,
+  // 本番ドメイン。DNS レコード（Vercel 向けの CNAME、プロキシ有効）はそのままで、Worker がリクエストを受ける。
+  // 戻すときはこの行を外して deploy する
+  "routes": [{ "pattern": "palette.gikyokutosyokan.com/*", "zone_name": "gikyokutosyokan.com" }],
+  // DB（Supabase / 東京）とのやり取りが多いので、Worker を DB の近くで動かす
+  "placement": { "mode": "smart" },
+  // 毎日 0:00 JST（15:00 UTC）に上演許可の期限切れ処理（worker.ts の scheduled）
+  "triggers": { "crons": ["0 15 * * *"] },
+  // Supabase（セッションプーラー）への接続。gikyoku-tosyokan-db と同じ設定（接続上限 10 を 2 つの Worker で分け合う）
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "cc264cf43d9b46888abc24ac3689be5e",
+      "localConnectionString": "postgresql://postgres:password@localhost:5432/sample"
+    }
+  ],
+  "vars": {
+    "AUTH_TRUST_HOST": "true",
+    "AUTH_URL": "https://palette.gikyokutosyokan.com",
+    "NEXT_PUBLIC_APP_URL": "https://palette.gikyokutosyokan.com",
+    "S3_REGION": "ap-northeast-1",
+    "S3_BUCKET": "gikyokutosyokan-public"
+  },
+  // PDF（作品・許可証）の描画は CPU を長く使う（既定の 30 秒で "exceeded resource limits" になった）。有料プランの上限まで広げる
+  "limits": { "cpu_ms": 300000 },
+  "observability": { "enabled": true }
+}
