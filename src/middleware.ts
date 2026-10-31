@@ -1,6 +1,13 @@
-import NextAuth from "next-auth";
-import { authConfig } from "@/lib/auth.config";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { decodeJwt } from "jose";
+
+// ログインは戯曲 ID（ポータル）。ここでは Cookie の JWT の期限だけを見て「ログイン画面へ送るか」を決める。
+// 署名の検証は各ページ・action の auth()（src/lib/gikyoku-id.ts）で行う（middleware の判断は入口の案内に過ぎない）
+const PORTAL_URL = process.env.GIKYOKU_ID_URL ?? "https://id.gikyokutosyokan.com";
+const ID_COOKIE = "gid_at";
+const ID_HINT_COOKIE = "gid_s";
+/** /refresh に回したばかりの印（60 秒）。ポータルが Cookie を出せなかったときに往復し続けないため */
+const BOUNCED_COOKIE = "gid_b";
 
 const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads", "/bookmarks", "/following", "/editor"];
 
@@ -29,29 +36,45 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-// edge ランタイムで動くので、Prisma を含む @/lib/auth ではなく DB に触れない設定だけで JWT を読む
-const { auth } = NextAuth(authConfig);
+/** 期限内の JWT が Cookie にあるか（署名は見ない） */
+function hasLiveToken(req: NextRequest): boolean {
+  const token = req.cookies.get(ID_COOKIE)?.value;
+  if (!token) return false;
+  try {
+    const { exp } = decodeJwt(token);
+    return typeof exp === "number" && exp * 1000 > Date.now() + 5_000;
+  } catch {
+    return false;
+  }
+}
 
-export default auth((req) => {
-  const isProtected = protectedPaths.some((path) =>
-    req.nextUrl.pathname.startsWith(path)
-  );
+export default function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const isProtected = protectedPaths.some((path) => pathname.startsWith(path));
+  const live = hasLiveToken(req);
 
-  if (isProtected && !req.auth) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirectTo", req.nextUrl.pathname);
-    return applySecurityHeaders(NextResponse.redirect(url));
+  // トークンは切れているがポータルにセッションがある → 一度だけ /refresh で取り直してもらう
+  if (!live && req.cookies.get(ID_HINT_COOKIE) && !req.cookies.get(BOUNCED_COOKIE)) {
+    const res = NextResponse.redirect(`${PORTAL_URL}/refresh?return_to=${encodeURIComponent(req.nextUrl.toString())}`);
+    res.cookies.set(BOUNCED_COOKIE, "1", { maxAge: 60, path: "/", httpOnly: true, sameSite: "lax", secure: true });
+    return applySecurityHeaders(res);
   }
 
-  if (req.nextUrl.pathname === "/login" && req.auth) {
+  if (isProtected && !live) {
+    return applySecurityHeaders(
+      NextResponse.redirect(`${PORTAL_URL}/?return_to=${encodeURIComponent(req.nextUrl.toString())}`),
+    );
+  }
+
+  if (pathname === "/login" && live) {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";
+    url.search = "";
     return applySecurityHeaders(NextResponse.redirect(url));
   }
 
   return applySecurityHeaders(NextResponse.next());
-});
+}
 
 export const config = {
   matcher: [

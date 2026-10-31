@@ -26,9 +26,10 @@
     }
   ],
   "vars": {
-    "AUTH_TRUST_HOST": "true",
-    "AUTH_URL": "https://palette.gikyokutosyokan.com",
     "NEXT_PUBLIC_APP_URL": "https://palette.gikyokutosyokan.com",
+    // ログインは戯曲 ID（ポータル）。Cookie の JWT は Supabase（gikyoku-id）の公開鍵で検証する
+    "GIKYOKU_ID_URL": "https://id.gikyokutosyokan.com",
+    "GIKYOKU_ID_SUPABASE_URL": "https://tujkphrlvcbxbrrkagsj.supabase.co",
     "S3_REGION": "ap-northeast-1",
     "S3_BUCKET": "gikyokutosyokan-public"
   },
