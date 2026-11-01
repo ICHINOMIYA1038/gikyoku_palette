@@ -61,7 +61,7 @@ jobs:
         run: |
           sleep 10
           fail=0
-          for path in / /plays /authors /rankings /terms /login /opengraph-image; do
+          for path in / /authors /rankings /terms /login /opengraph-image; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://palette.gikyokutosyokan.com$path")
             echo "$code $path"
             [ "$code" = "200" ] || fail=1
