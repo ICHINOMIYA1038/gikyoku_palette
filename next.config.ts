@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // yoga-layout（@react-pdf/renderer のレイアウトエンジン）は Next.js で束ねず、そのまま読み込む。
+  // Cloudflare Workers 向けに patches/ で load.js を差し替えていて、OpenNext の束ね方（.wasm を wrangler に渡す）に乗せるため
+  serverExternalPackages: ["yoga-layout"],
   images: {
     remotePatterns: [
       {
@@ -12,14 +15,6 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
       },
-    ],
-  },
-  // 許可証PDF生成 (api/permissions/[id]/certificate) が
-  // public/fonts/noto-sans-jp/*.woff を fs 経由で読むため、
-  // Vercel Lambda バンドルに含める。
-  outputFileTracingIncludes: {
-    "/api/permissions/[id]/certificate": [
-      "./public/fonts/noto-sans-jp/**",
     ],
   },
 };

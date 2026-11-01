@@ -45,3 +45,8 @@ next-env.d.ts
 # prisma
 prisma/migrations/**/migration_lock.toml
 .worktrees/
+
+# Cloudflare Workers（OpenNext のビルド成果物と wrangler の作業ファイル）
+.open-next/
+.wrangler/
+.dev.vars

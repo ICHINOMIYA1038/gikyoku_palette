@@ -1,0 +1,35 @@
+diff --git a/node_modules/yoga-layout/dist/src/load.js b/node_modules/yoga-layout/dist/src/load.js
+index efd1554..b30ade5 100644
+--- a/node_modules/yoga-layout/dist/src/load.js
++++ b/node_modules/yoga-layout/dist/src/load.js
+@@ -10,8 +10,28 @@
+ // @ts-ignore untyped from Emscripten
+ import loadYogaImpl from '../binaries/yoga-wasm-base64-esm.js';
+ import wrapAssembly from "./wrapAssembly.js";
++
++// 戯曲パレットのパッチ（patches/yoga-layout+3.2.1.patch）。
++// Cloudflare Workers では、バイト列から WebAssembly を組み立てること（WebAssembly.instantiate(bytes)）が禁止されていて、
++// 同梱の base64 からの読み込みだと "Wasm code generation disallowed by embedder" で失敗する。
++// Workers で動いているときだけ、import したモジュール（wrangler が .wasm を CompiledWasm として束ねる）から
++// インスタンスを作って Emscripten に渡す。yoga.wasm は scripts/extract-yoga-wasm.mjs が postinstall で base64 から取り出す。
++const isCloudflareWorkers =
++  typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
++
+ export async function loadYoga() {
++  if (isCloudflareWorkers) {
++    const wasmModule = (await import("../binaries/yoga.wasm")).default;
++    return wrapAssembly(
++      await loadYogaImpl({
++        instantiateWasm(imports, successCallback) {
++          const instance = new WebAssembly.Instance(wasmModule, imports);
++          successCallback(instance);
++          return instance.exports;
++        },
++      }),
++    );
++  }
+   return wrapAssembly(await loadYogaImpl());
+ }
+ export * from "./generated/YGEnums.js";
+-//# sourceMappingURL=load.js.map
+\ No newline at end of file
