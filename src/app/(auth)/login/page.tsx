@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { signIn, auth } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+import { loginUrl } from "@/lib/gikyoku-id";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Pen, ShieldCheck, Star, Sparkles } from "lucide-react";
@@ -16,7 +17,9 @@ export default async function LoginPage({
   searchParams: Promise<{ redirectTo?: string }>;
 }) {
   const { redirectTo: to } = await searchParams;
-  const redirectTo = to || "/dashboard";
+  const redirectTo = to && to.startsWith("/") ? to : "/dashboard";
+  // ログイン画面そのものは戯曲 ID のポータルにある。ここはその入口
+  const portalLogin = await loginUrl(redirectTo);
 
   // 既にログイン済みなら dashboard に飛ばす
   const session = await auth();
@@ -93,21 +96,15 @@ export default async function LoginPage({
                   ログイン / 新規登録
                 </h2>
                 <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-                  Googleアカウントで
+                  Google または Apple のアカウントで
                   <br className="sm:hidden" />
                   かんたん・安全に始められます
                 </p>
               </div>
 
-              <form
-                className="mt-6"
-                action={async () => {
-                  "use server";
-                  await signIn("google", { redirectTo });
-                }}
-              >
-                <button
-                  type="submit"
+              <div className="mt-6">
+                <a
+                  href={portalLogin}
                   className="group relative w-full h-12 inline-flex items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white text-base font-medium text-gray-800 shadow-sm hover:bg-gray-50 hover:border-gray-400 transition-all"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -128,9 +125,9 @@ export default async function LoginPage({
                       fill="#EA4335"
                     />
                   </svg>
-                  Googleで続ける
-                </button>
-              </form>
+                  戯曲 ID でログイン
+                </a>
+              </div>
 
               <div className="mt-5 rounded-md bg-gray-50 border border-gray-100 p-3">
                 <p className="text-xs text-gray-600 leading-relaxed">
