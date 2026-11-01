@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
 import { decodeJwt } from "jose";
 
 // ログインは戯曲 ID（ポータル）。ここでは Cookie の JWT の期限だけを見て「ログイン画面へ送るか」を決める。
@@ -8,6 +8,8 @@ const ID_COOKIE = "gid_at";
 const ID_HINT_COOKIE = "gid_s";
 /** /refresh に回したばかりの印（60 秒）。ポータルが Cookie を出せなかったときに往復し続けないため */
 const BOUNCED_COOKIE = "gid_b";
+/** このサービスの利用をポータルに記録済みの印（30 日）。運営の一覧用 */
+const SEEN_COOKIE = "gid_seen";
 
 const protectedPaths = ["/dashboard", "/permissions", "/profile", "/threads", "/bookmarks", "/following", "/editor"];
 
@@ -36,22 +38,23 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-/** 期限内の JWT が Cookie にあるか（署名は見ない） */
-function hasLiveToken(req: NextRequest): boolean {
+/** 期限内の JWT（署名は見ない）。無ければ null */
+function liveToken(req: NextRequest): string | null {
   const token = req.cookies.get(ID_COOKIE)?.value;
-  if (!token) return false;
+  if (!token) return null;
   try {
     const { exp } = decodeJwt(token);
-    return typeof exp === "number" && exp * 1000 > Date.now() + 5_000;
+    return typeof exp === "number" && exp * 1000 > Date.now() + 5_000 ? token : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-export default function middleware(req: NextRequest) {
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const { pathname } = req.nextUrl;
   const isProtected = protectedPaths.some((path) => pathname.startsWith(path));
-  const live = hasLiveToken(req);
+  const token = liveToken(req);
+  const live = token !== null;
 
   // トークンは切れているがポータルにセッションがある → 一度だけ /refresh で取り直してもらう
   if (!live && req.cookies.get(ID_HINT_COOKIE) && !req.cookies.get(BOUNCED_COOKIE)) {
@@ -73,7 +76,19 @@ export default function middleware(req: NextRequest) {
     return applySecurityHeaders(NextResponse.redirect(url));
   }
 
-  return applySecurityHeaders(NextResponse.next());
+  const res = NextResponse.next();
+  // 戯曲 ID でこのサービスに入った記録をポータルに 1 回だけ送る（運営の一覧用）
+  if (token && !req.cookies.get(SEEN_COOKIE)) {
+    event.waitUntil(
+      fetch(`${PORTAL_URL}/api/seen`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ service: "palette" }),
+      }).catch(() => undefined),
+    );
+    res.cookies.set(SEEN_COOKIE, "1", { maxAge: 60 * 60 * 24 * 30, path: "/", httpOnly: true, sameSite: "lax", secure: true });
+  }
+  return applySecurityHeaders(res);
 }
 
 export const config = {
