@@ -28,6 +28,8 @@ export const metadata: Metadata = {
   },
   description:
     "戯曲を投稿・公開し、上演許可を申請できるプラットフォーム。演劇の脚本を探して、上演許可を簡単に取得できます。",
+  // 各ページの URL を正規の URL にする（クエリは含めない）
+  alternates: { canonical: "./" },
   openGraph: {
     type: "website",
     siteName: "戯曲パレット",
