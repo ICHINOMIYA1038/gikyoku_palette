@@ -92,6 +92,7 @@ export function PlayEditForm({
             <label className="text-sm font-medium text-gray-700">本文</label>
             <BodyTypeSelector
               playId={play.id}
+              sourceScriptId={play.sourceScriptId}
               locked
               initialType={(firstString(v?.bodyType) as "text" | "pdf" | "editor") || (play.bodyType as "text" | "pdf" | "editor") || "text"}
               initialBody={firstString(v?.body) ?? play.body ?? ""}

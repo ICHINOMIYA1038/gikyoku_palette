@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PenLine } from "lucide-react";
 import { Banner } from "@/components/ui/banner";
 import { detectPdfMeta } from "@/lib/pdf-meta";
+import { EditorSourcePanel } from "@/components/plays/editor-source-panel";
 
 type BodyType = "text" | "pdf" | "editor";
 type Orientation = "portrait" | "landscape";
@@ -17,6 +18,8 @@ type Props = {
   initialReadingDirection?: ReadingDirection;
   playId?: string;
   locked?: boolean;
+  /** 戯曲エディタから取り込んだ作品の原稿 ID。あれば本文はエディタで直す */
+  sourceScriptId?: string | null;
 };
 
 export function BodyTypeSelector({
@@ -27,6 +30,7 @@ export function BodyTypeSelector({
   initialReadingDirection = "ltr",
   playId,
   locked = false,
+  sourceScriptId = null,
 }: Props) {
   const [bodyType, setBodyType] = useState<BodyType>(initialType);
   const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
@@ -192,8 +196,13 @@ export function BodyTypeSelector({
         </div>
       )}
 
-      {/* 執筆エディタへの導線 */}
-      {bodyType === "editor" && (
+      {/* 戯曲エディタから取り込んだ作品 */}
+      {bodyType === "editor" && sourceScriptId && playId && (
+        <EditorSourcePanel playId={playId} sourceScriptId={sourceScriptId} />
+      )}
+
+      {/* 執筆エディタへの導線（戯曲エディタへ移す前に、パレットの中で書いた作品） */}
+      {bodyType === "editor" && !sourceScriptId && (
         <div className="rounded-lg border border-gray-200 p-6 space-y-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-pink-50">
