@@ -99,7 +99,6 @@ export function PlayCreateForm({
     }[] = [
       { value: "text", label: "テキスト入力", desc: "本文をそのまま貼り付けて公開する一番シンプルな方法", Icon: FileText },
       { value: "pdf", label: "PDFアップロード", desc: "既に組版済みのPDFをそのまま公開する", Icon: FileType },
-      { value: "editor", label: "執筆エディタ", desc: "ト書き・台詞などの構造を持つ専用エディタで書く（自動保存）", Icon: PenLine, desktopOnly: true },
     ];
     return (
       <div className="space-y-6">
@@ -125,9 +124,20 @@ export function PlayCreateForm({
             </button>
           ))}
         </div>
-        <p className="md:hidden text-xs text-gray-500 leading-relaxed rounded-lg bg-gray-50 border border-gray-200 p-3">
-          ※「執筆エディタ」は画面の広いPC・タブレットからのみご利用いただけます。
-        </p>
+        <a
+          href="https://editor.gikyokutosyokan.com"
+          className="flex items-start gap-3 rounded-xl border border-dashed border-gray-300 p-4 text-left hover:border-pink-300 hover:bg-pink-50/40 transition-colors"
+        >
+          <div className="flex items-center justify-center w-10 h-10 shrink-0 rounded-lg bg-pink-50">
+            <PenLine className="h-5 w-5 text-pink-500" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-900">これから書く場合は、戯曲エディタで</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              ト書き・台詞の形で書ける戯曲エディタで原稿を書き、「パレットに投稿」を押すと、ここに作品ができます。パソコン・タブレット向けです。
+            </p>
+          </div>
+        </a>
       </div>
     );
   }

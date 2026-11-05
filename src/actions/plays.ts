@@ -152,7 +152,10 @@ export async function updatePlay(playId: string, formData: FormData) {
   const tagNames = formData.getAll("tagNames").map(String);
   const hasTagInput = formData.has("tagNames");
 
-  const { coverImageUrl: coverUrl, bodyPdfUrl, seriesId, seriesOrder, ...restData } = parsed.data;
+  const { coverImageUrl: coverUrl, bodyPdfUrl, seriesId, seriesOrder, ...parsedRest } = parsed.data;
+  // エディタ形式の作品はフォームに本文の欄が無い。本文と形式はフォームから上書きしない（空の本文で消さないため）
+  const { body, bodyType, ...metaData } = parsedRest;
+  const restData = play.bodyType === "editor" ? metaData : { ...metaData, body, bodyType };
 
   // 指定された seriesId が自分のものか検証。他人のシリーズには紐付けない。
   let safeSeriesId: string | null = null;
@@ -324,5 +327,22 @@ export async function savePlayBody(
     },
   });
 
+  return ok();
+}
+
+/**
+ * 戯曲エディタとの連携を解除する。以後はテキストの作品として、パレットで本文を直せる。
+ * 本文はそのまま残す。エディタの原稿にも触れない
+ */
+export async function unlinkEditorSource(playId: string) {
+  const userId = await requireUserId();
+  const play = await getPlayIfOwner(playId, userId);
+  if (!play || !play.sourceScriptId) return fail("権限がありません");
+  await prisma.palettePlay.update({
+    where: { id: playId },
+    data: { sourceScriptId: null, sourceRevision: null, bodyType: "text" },
+  });
+  revalidatePath(`/dashboard/plays/${playId}/edit`);
+  revalidatePath(`/plays/${playId}`);
   return ok();
 }
