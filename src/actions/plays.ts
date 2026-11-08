@@ -202,14 +202,13 @@ export async function togglePublish(playId: string) {
   if (!play) return fail("権限がありません");
 
   const isPublished = !play.isPublished;
+  // 公開日は最初に公開した日のまま残す（オーナーの決定 2026-11-08）。
+  // 非公開にしてから公開し直しても、フォロワーへの「新作を公開しました」は送らず、新着順の並びも変わらない
   const wasFirstPublish = isPublished && !play.publishedAt;
 
   await prisma.palettePlay.update({
     where: { id: playId },
-    data: {
-      isPublished,
-      publishedAt: isPublished ? new Date() : null,
-    },
+    data: isPublished ? { isPublished, publishedAt: play.publishedAt ?? new Date() } : { isPublished },
   });
 
   // 初公開のとき、フォロワーへ通知
