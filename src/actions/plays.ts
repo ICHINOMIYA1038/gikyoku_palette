@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getPublicUsersByIds, getPublicUserWithBio, unknownUser } from "@/lib/users";
+import { getPublicUser, getPublicUsersByIds, getPublicUserWithBio, unknownUser } from "@/lib/users";
 import { getPlayIfOwner, requireUserId } from "@/lib/auth-helpers";
 import { ok, fail, zodFailure } from "@/lib/action-result";
 import { playSchema, readPlayInput } from "@/lib/validations/play";
@@ -226,6 +226,22 @@ export async function togglePublish(playId: string) {
         })
       )
     );
+  }
+
+  // 公開されたら運営（Slack の #x-posts）に知らせる。失敗しても公開は止めない
+  if (isPublished) {
+    try {
+      const { notifyPlayPublished } = await import("@/lib/slack-notify");
+      const author = await getPublicUser(userId);
+      void notifyPlayPublished({
+        id: playId,
+        title: play.title,
+        authorName: author?.displayName || "不明",
+        republished: !wasFirstPublish,
+      });
+    } catch (e) {
+      console.error("公開の知らせ（#x-posts）を用意できなかった", e);
+    }
   }
 
   revalidatePath("/");
