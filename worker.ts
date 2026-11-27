@@ -16,7 +16,15 @@ export default {
     const request = new Request(`${base}/api/cron/expire-permissions`, {
       headers: { authorization: `Bearer ${env.CRON_SECRET ?? ""}` },
     });
-    const response: Response = await handler.fetch(request, env, ctx);
-    console.log(`cron expire-permissions: HTTP ${response.status} ${await response.text()}`);
+    // 失敗（鍵の不一致の 401 や 500）を console.log のままにすると、止まり続けても気づけない。
+    // console.error にして error-notifier（Slack の #x-errors）に出す
+    try {
+      const response: Response = await handler.fetch(request, env, ctx);
+      const line = `cron expire-permissions: HTTP ${response.status} ${(await response.text()).slice(0, 500)}`;
+      if (response.ok) console.log(line);
+      else console.error(line);
+    } catch (e) {
+      console.error("cron expire-permissions: 実行できなかった", e);
+    }
   },
 };
