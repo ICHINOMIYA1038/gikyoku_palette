@@ -26,7 +26,7 @@ export function PdfThumbnail({ url, fileName, fileSize }: Props) {
       try {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-        const doc = await pdfjs.getDocument({ url, isEvalSupported: false }).promise;
+        const doc = await pdfjs.getDocument({ url }).promise;
         const page = await doc.getPage(1);
         if (cancelled) return;
 

@@ -64,7 +64,6 @@ export function PdfViewer({
         pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         const pdfDoc = await pdfjsLib.getDocument({
           url: src,
-          isEvalSupported: false,
           cMapUrl: "/cmaps/",
           cMapPacked: true,
         }).promise;
